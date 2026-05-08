@@ -14,18 +14,58 @@ export const evolutionApi = {
         {
           number,
           text,
-          delay: 1200, // Simular que está escribiendo
+          delay: 1200,
           linkPreview: false
         },
         {
-          headers: {
-            apikey: API_KEY
-          }
+          headers: { apikey: API_KEY }
         }
       );
       return response.data;
     } catch (error: any) {
-      console.error(`Error sending message to ${number} on instance ${instance}:`, error.response?.data || error.message);
+      console.error(`Error sending message:`, error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  createInstance: async (instanceName: string) => {
+    try {
+      const response = await axios.post(
+        `${API_URL}/instance/create`,
+        {
+          instanceName,
+          qrcode: true,
+          integration: "WHATSAPP-BAILEYS"
+        },
+        {
+          headers: { apikey: API_KEY }
+        }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error(`Error creating instance ${instanceName}:`, error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  setWebhook: async (instanceName: string, webhookUrl: string) => {
+    try {
+      const response = await axios.post(
+        `${API_URL}/webhook/set/${instanceName}`,
+        {
+          url: webhookUrl,
+          enabled: true,
+          events: [
+            "MESSAGES_UPSERT"
+          ]
+        },
+        {
+          headers: { apikey: API_KEY }
+        }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.error(`Error setting webhook for ${instanceName}:`, error.response?.data || error.message);
       throw error;
     }
   }

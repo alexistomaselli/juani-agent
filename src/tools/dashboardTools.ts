@@ -33,14 +33,28 @@ export const dashboardTools = {
       productId: z.string().optional().describe('ID del producto si se conoce'),
       isPaid: z.boolean().optional().describe('Si el pedido ya fue pagado'),
     }),
-    execute: async (params) => {
+    execute: async (params: {
+      customerName: string;
+      whatsapp: string;
+      product: string;
+      quantity: number;
+      unitPrice?: number;
+      productId?: string;
+      isPaid?: boolean;
+    }) => {
       try {
         const response = await axios.post(`${API_URL}/api/orders`, params);
-        const order = response.data;
+        const order = response.data as { 
+          orderNumber: number; 
+          product: string; 
+          totalAmount: number; 
+          quantity: number;
+        };
+        
         return { 
           success: true, 
           order: order,
-          message: `Pedido #${order.orderNumber} registrado: ${params.quantity}x ${order.product} ($${order.totalAmount}) para ${params.customerName}.`
+          message: `Pedido #${order.orderNumber} registrado: ${order.quantity}x ${order.product} ($${order.totalAmount}) para ${params.customerName}.`
         };
       } catch (error: any) {
         console.error('Error creating order:', error.response?.data || error.message);
