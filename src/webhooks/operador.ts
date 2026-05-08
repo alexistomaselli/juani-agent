@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
-import { processOperatorMessage } from '../agents/operadorAgent';
-import { evolutionApi } from '../lib/evolutionApi';
+import { processOperatorMessage } from '../agents/operadorAgent.js';
+import { evolutionApi } from '../lib/evolutionApi.js';
+import { EvolutionWebhookPayload } from '../types/evolution.js';
 
 export const operatorWebhook = async (req: Request, res: Response) => {
-  const body = req.body;
+  const body = req.body as EvolutionWebhookPayload;
 
   // 1. Validar que sea un mensaje entrante (upsert) y no sea enviado por el bot (fromMe)
   if (body.event !== 'messages.upsert') {
@@ -11,6 +12,11 @@ export const operatorWebhook = async (req: Request, res: Response) => {
   }
 
   const messageData = body.data;
+  
+  if (!messageData || !messageData.key) {
+    return res.status(200).send('Invalid message data');
+  }
+
   const isFromMe = messageData.key.fromMe;
   
   if (isFromMe) {
@@ -24,10 +30,18 @@ export const operatorWebhook = async (req: Request, res: Response) => {
                messageData.message?.imageMessage?.caption || "";
   
   const remoteJid = messageData.key.remoteJid;
+  if (!remoteJid) {
+    return res.status(200).send('No remoteJid found');
+  }
+
   const whatsappNumber = remoteJid.split('@')[0];
 
   // 3. Validar que el número esté autorizado
-  const allowedNumbers = process.env.ALLOWED_OPERATORS?.split(',').map(n => n.trim()).filter(n => n.length > 0) || [];
+  const allowedOperatorsVar = process.env.ALLOWED_OPERATORS || "";
+  const allowedNumbers: string[] = allowedOperatorsVar
+    .split(',')
+    .map((n) => n.trim())
+    .filter((n) => n.length > 0);
   
   if (allowedNumbers.length > 0 && !allowedNumbers.includes(whatsappNumber)) {
     console.log(`⚠️ [OPERADOR] Acceso DENEGADO para el número: ${whatsappNumber}. Permitidos: ${allowedNumbers.length} números.`);

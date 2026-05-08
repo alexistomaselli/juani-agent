@@ -1,15 +1,21 @@
 import { Request, Response } from 'express';
-import { processPublicMessage } from '../agents/publicoAgent';
-import { evolutionApi } from '../lib/evolutionApi';
+import { processPublicMessage } from '../agents/publicoAgent.js';
+import { evolutionApi } from '../lib/evolutionApi.js';
+import { EvolutionWebhookPayload } from '../types/evolution.js';
 
 export const publicWebhook = async (req: Request, res: Response) => {
-  const body = req.body;
+  const body = req.body as EvolutionWebhookPayload;
 
   if (body.event !== 'messages.upsert') {
     return res.status(200).send('Event ignored');
   }
 
   const messageData = body.data;
+  
+  if (!messageData || !messageData.key) {
+    return res.status(200).send('Invalid message data');
+  }
+
   const isFromMe = messageData.key.fromMe;
   
   if (isFromMe) {
@@ -21,6 +27,10 @@ export const publicWebhook = async (req: Request, res: Response) => {
                messageData.message?.imageMessage?.caption || "";
   
   const remoteJid = messageData.key.remoteJid;
+  if (!remoteJid) {
+    return res.status(200).send('No remoteJid found');
+  }
+
   const whatsappNumber = remoteJid.split('@')[0];
 
   if (!text) {

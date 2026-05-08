@@ -1,7 +1,7 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
-import { operatorWebhook } from './webhooks/operador';
-import { publicWebhook } from './webhooks/publico';
+import { operatorWebhook } from './webhooks/operador.js';
+import { publicWebhook } from './webhooks/publico.js';
 
 dotenv.config();
 
@@ -11,7 +11,7 @@ const port = process.env.PORT || 3001;
 app.use(express.json());
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/health', (req: Request, res: Response) => {
   res.json({ 
     status: 'ok', 
     service: 'juani-agent',
