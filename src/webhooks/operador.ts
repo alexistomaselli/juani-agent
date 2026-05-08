@@ -39,20 +39,31 @@ export const operatorWebhook = async (req: Request, res: Response) => {
     return res.status(200).send('OK');
   }
 
-  // 4. Obtener el texto del mensaje
+  // 4. Obtener el texto del mensaje y audio base64
+  console.log('📦 Estructura del mensaje recibido:', JSON.stringify(message.message, null, 2));
+
   const messageText = message.message?.conversation || 
                      message.message?.extendedTextMessage?.text || 
-                     message.message?.imageMessage?.caption || "";
+                     message.message?.imageMessage?.caption || 
+                     message.message?.audioMessage?.transcription || "";
+  
+  let audioBase64 = message.message?.audioMessage?.base64;
 
-  if (!messageText) {
+  // Limpiar el prefijo si existe (ej: data:audio/ogg;base64,XXXXX)
+  if (audioBase64 && audioBase64.includes('base64,')) {
+    audioBase64 = audioBase64.split('base64,')[1];
+  }
+
+  if (!messageText && !audioBase64) {
+    console.log('⚠️ Mensaje vacío y sin audio, ignorando.');
     return res.status(200).send('OK');
   }
 
-  console.log(`🤖 Procesando mensaje de operador ${senderNumber}: ${messageText.substring(0, 50)}...`);
+  console.log(`🤖 Procesando de ${senderNumber}: ${audioBase64 ? '[AUDIO]' : ''} ${messageText.substring(0, 50)}`);
 
   try {
-    // 5. Procesar el mensaje con el agente
-    const response = await processOperatorMessage(senderNumber, messageText);
+    // 5. Procesar el mensaje con el agente (pasando audio si existe)
+    const response = await processOperatorMessage(senderNumber, messageText, audioBase64);
 
     // 6. Enviar la respuesta de vuelta
     // Enviamos al JID original (si era grupo, al grupo; si era privado, al privado)

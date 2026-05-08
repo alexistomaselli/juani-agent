@@ -23,6 +23,8 @@ export interface EvolutionMessage {
     audioMessage?: {
       url?: string;
       mimetype?: string;
+      transcription?: string;
+      base64?: string;
     };
     documentMessage?: {
       caption?: string;

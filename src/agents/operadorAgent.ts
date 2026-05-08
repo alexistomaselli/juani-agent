@@ -46,12 +46,23 @@ NOTAS SOBRE AUDIO Y PAGOS
 - Si el operador dice "Anotame 2 de pollo para Juan", pasá isPaid: false.
 `;
 
-export async function processOperatorMessage(whatsapp: string, message: string) {
+export async function processOperatorMessage(whatsapp: string, message: string, audioData?: string) {
   // Obtener historial
   const history = conversationStore.getHistory(whatsapp);
+
+  // Preparar el contenido del mensaje
+  const userContent: any[] = [{ type: 'text', text: message || "Procesa este audio para registrar el pedido." }];
   
-  // Agregar mensaje del usuario
-  conversationStore.addMessage(whatsapp, { role: 'user', content: message });
+  if (audioData) {
+    userContent.push({
+      type: 'file',
+      data: audioData,
+      mimeType: 'audio/ogg'
+    });
+  }
+
+  // Agregar mensaje del usuario al historial (como texto para la memoria)
+  conversationStore.addMessage(whatsapp, { role: 'user', content: message || "[Audio enviado]" });
 
   try {
     const result = await generateText({
@@ -59,7 +70,7 @@ export async function processOperatorMessage(whatsapp: string, message: string) 
       system: SYSTEM_PROMPT,
       messages: [
         ...history,
-        { role: 'user', content: message }
+        { role: 'user', content: userContent }
       ],
       tools: dashboardTools,
       maxSteps: 5, // Permitir que llame a herramientas y luego responda
@@ -71,6 +82,6 @@ export async function processOperatorMessage(whatsapp: string, message: string) 
     return result.text;
   } catch (error) {
     console.error('Error in operator agent:', error);
-    return "Lo siento, hubo un error procesando tu pedido. Por favor intentá de nuevo.";
+    return "Lo siento, hubo un error procesando tu pedido o el audio. Por favor intentá de nuevo.";
   }
 }
