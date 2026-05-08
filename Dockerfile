@@ -14,8 +14,11 @@ RUN npm install
 # Copiar el resto del código
 COPY . .
 
+# Construir el proyecto (compilar TypeScript a JavaScript)
+RUN npm run build
+
 # Exponer el puerto
 EXPOSE 3001
 
-# Comando para arrancar la aplicación
+# Comando para arrancar la aplicación usando el código compilado
 CMD ["npm", "start"]
