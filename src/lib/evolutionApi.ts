@@ -53,10 +53,12 @@ export const evolutionApi = {
       const response = await axios.post(
         `${API_URL}/webhook/set/${instanceName}`,
         {
-          url: webhookUrl,
-          enabled: true,
+          webhook: {
+            url: webhookUrl,
+            enabled: true,
+          },
           events: [
-            "MESSAGES_UPSERT"
+            "messages.upsert"
           ]
         },
         {
