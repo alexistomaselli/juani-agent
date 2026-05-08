@@ -8,86 +8,63 @@ export const operatorWebhook = async (req: Request, res: Response) => {
 
   // 1. Validar que sea un mensaje entrante (upsert) y no sea enviado por el bot (fromMe)
   if (body.event !== 'messages.upsert') {
-    return res.status(200).send('Event ignored');
+    return res.status(200).send('OK');
   }
 
-  const messageData = body.data;
-  
-  if (!messageData || !messageData.key) {
-    return res.status(200).send('Invalid message data');
+  const message = body.data;
+  if (message.key.fromMe) {
+    return res.status(200).send('OK');
   }
 
-  const isFromMe = messageData.key.fromMe;
+  // 2. Extraer el número de WhatsApp del remitente
+  // Si es un grupo, el remitente real está en 'participant'
+  // Si es chat individual, está en 'remoteJid'
+  const isGroup = message.key.remoteJid.endsWith('@g.us');
+  const senderJid = isGroup ? message.key.participant : message.key.remoteJid;
   
-  if (isFromMe) {
-    return res.status(200).send('Message from bot ignored');
+  if (!senderJid) {
+    console.log('No sender JID found, ignoring message');
+    return res.status(200).send('OK');
   }
 
-  // 2. Extraer el texto del mensaje y el número
-  // El texto puede estar en conversation, extendedTextMessage, etc.
-  const text = messageData.message?.conversation || 
-               messageData.message?.extendedTextMessage?.text || 
-               messageData.message?.imageMessage?.caption || 
-               messageData.message?.videoMessage?.caption ||
-               messageData.message?.documentMessage?.caption || "";
-  
-  const remoteJid = messageData.key.remoteJid;
-  if (!remoteJid) {
-    return res.status(200).send('No remoteJid found');
-  }
+  const senderNumber = senderJid.split('@')[0];
+  const groupJid = isGroup ? message.key.remoteJid : null;
 
-  const whatsappNumber = remoteJid.split('@')[0];
+  // 3. Verificar si el remitente es un operador permitido
+  const allowedOperators = process.env.ALLOWED_OPERATORS?.split(',') || [];
+  const isAllowed = allowedOperators.some(op => senderNumber.includes(op));
 
-  // 3. Validar que el número esté autorizado
-  const allowedOperatorsVar = process.env.ALLOWED_OPERATORS || "";
-  const allowedNumbers: string[] = allowedOperatorsVar
-    .split(',')
-    .map((n) => n.trim())
-    .filter((n) => n.length > 0);
-  
-  const isAllowed = allowedNumbers.length === 0 || allowedNumbers.some(allowed => {
-    if (whatsappNumber === allowed) return true;
-    // Manejo de números de Argentina (con o sin el '9' después del '54')
-    if (whatsappNumber.startsWith('549') && allowed.startsWith('54') && !allowed.startsWith('549')) {
-      return whatsappNumber.replace('549', '54') === allowed;
-    }
-    if (allowed.startsWith('549') && whatsappNumber.startsWith('54') && !whatsappNumber.startsWith('549')) {
-      return allowed.replace('549', '54') === whatsappNumber;
-    }
-    return false;
-  });
-  
   if (!isAllowed) {
-    console.log(`⚠️ [OPERADOR] Acceso DENEGADO para el número: ${whatsappNumber}. Permitidos: ${allowedNumbers.join(', ')}`);
-    return res.status(200).send('Unauthorized number');
-  }
-  
-  if (allowedNumbers.length === 0) {
-    console.log(`⚠️ [OPERADOR] ATENCIÓN: No hay operadores configurados en ALLOWED_OPERATORS. El acceso es LIBRE.`);
+    console.log(`Mensaje ignorado de ${senderNumber} (no es un operador permitido)`);
+    return res.status(200).send('OK');
   }
 
-  if (!text) {
-    return res.status(200).send('No text found');
+  // 4. Obtener el texto del mensaje
+  const messageText = message.message?.conversation || 
+                     message.message?.extendedTextMessage?.text || 
+                     message.message?.imageMessage?.caption || "";
+
+  if (!messageText) {
+    return res.status(200).send('OK');
   }
 
-  console.log(`📩 [OPERADOR] Mensaje de ${whatsappNumber}: ${text}`);
+  console.log(`🤖 Procesando mensaje de operador ${senderNumber}: ${messageText.substring(0, 50)}...`);
 
-  // 3. Procesar con el agente
   try {
-    const responseText = await processOperatorMessage(whatsappNumber, text);
+    // 5. Procesar el mensaje con el agente
+    const response = await processOperatorMessage(senderNumber, messageText);
 
-    // 4. Enviar respuesta via Evolution API
-    try {
-      const instance = process.env.EVOLUTION_INSTANCE_OPERADOR || 'juani-operador';
-      await evolutionApi.sendText(instance, whatsappNumber, responseText);
-    } catch (sendError) {
-      console.error('⚠️ [OPERADOR] Error enviando respuesta a WhatsApp:', sendError instanceof Error ? sendError.message : sendError);
-      // No fallamos el webhook porque el pedido ya podría estar registrado
-    }
+    // 6. Enviar la respuesta de vuelta
+    // Enviamos al JID original (si era grupo, al grupo; si era privado, al privado)
+    await evolutionApi.sendText(
+      process.env.EVOLUTION_INSTANCE_OPERADOR || 'juani-operador',
+      message.key.remoteJid,
+      response
+    );
 
-    res.status(200).send('Success');
+    res.status(200).send('OK');
   } catch (error) {
-    console.error('❌ [OPERADOR] Webhook error:', error);
+    console.error('Error in operator webhook:', error);
     res.status(500).send('Internal Server Error');
   }
 };

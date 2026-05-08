@@ -2,9 +2,7 @@ import { google } from '@ai-sdk/google';
 import { generateText } from 'ai';
 import { dashboardTools } from '../tools/dashboardTools.js';
 import { conversationStore } from '../memory/conversationStore.js';
-import * as dotenv from 'dotenv';
 
-dotenv.config();
 
 const SYSTEM_PROMPT = `
 Eres el Agente Operador de "Juani Cocina". Tu función es ayudar a registrar pedidos de forma rápida y eficiente.

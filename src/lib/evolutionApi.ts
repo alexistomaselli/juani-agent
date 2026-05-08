@@ -1,7 +1,4 @@
 import axios from 'axios';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const API_URL = process.env.EVOLUTION_API_URL;
 const API_KEY = process.env.EVOLUTION_API_KEY;
