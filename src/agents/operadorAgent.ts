@@ -19,48 +19,31 @@ PASO 1 — CONSULTAR CATÁLOGO
 PASO 2 — IDENTIFICAR PRODUCTO
   Extraé del mensaje del usuario qué producto quiere.
   - Buscá coincidencia en el catálogo (puede ser parcial o con errores de tipeo).
-    Ejemplos: "prepizetas" → "Prepizzas", "prepizzetas" → "Prepizzas", "mila" → "Milanesas de Pollo"
   - Si HAY match: usá el nombre exacto y el id del catálogo.
   - Si NO HAY match: respondé amablemente diciendo que ese producto no está disponible 
     y listá los productos que sí existen para que elija.
-    Ejemplo: "No tenemos 'milanesas' en el catálogo por ahora. Los productos disponibles son: Prepizzas ($X)."
 
 PASO 3 — DATOS DEL PEDIDO
   Extraé del mensaje:
-  - customerName (obligatorio): nombre del cliente
-  - quantity (obligatorio): cantidad de paquetes (si no dice cantidad, asumí 1)
-  - whatsapp (opcional): número de teléfono
-  - unitPrice (opcional): si el usuario dice un precio diferente al del catálogo (ej: "a 5000")
-  - isPaid (opcional): si el usuario menciona que ya pagó
-
-  Sobre el WhatsApp:
-  - Si el usuario incluye un número en el mensaje, usalo.
-  - Si NO incluye número, preguntá: "¿Tenés el WhatsApp del cliente o lo cargamos después?"
-  - Si dice "después", "no", "no tengo", etc → pasá whatsapp como cadena vacía "".
-  - Si te da el número → usalo.
+  - customerName (obligatorio): nombre del cliente.
+  - quantity (obligatorio): cantidad de paquetes (si no dice cantidad, asumí 1).
+  - product: nombre EXACTO del catálogo.
+  - unitPrice (opcional): usá el del catálogo, a menos que el usuario especifique uno distinto.
+  - whatsapp (opcional): número del cliente. Si no está, preguntá si lo tienen.
+  - isPaid (opcional): Si el usuario menciona "ya pagó", "pagado", "cobrado", "me pagó", marcá isPaid: true. Por defecto es false.
 
 PASO 4 — CREAR PEDIDO
-  Llamá a 'crear_pedido' con:
-  - customerName: nombre del cliente
-  - product: nombre EXACTO del catálogo (no lo que escribió el usuario)
-  - productId: el id del producto del catálogo
-  - quantity: cantidad de paquetes
-  - unitPrice: precio del catálogo, O el precio custom si el usuario especificó uno
-  - whatsapp: número o "" si no se tiene
-  - isPaid: true/false si se mencionó
+  Llamá a 'crear_pedido' con los datos recolectados.
 
 PASO 5 — CONFIRMAR
-  Respondé con la confirmación que devuelve la herramienta.
-  Formato: "✅ Pedido #N registrado: Qx Producto ($Total) para Cliente."
+  Confirmá con el número de pedido y los detalles.
 
 ═══════════════════════════════════════
-REGLAS GENERALES
+NOTAS SOBRE AUDIO Y PAGOS
 ═══════════════════════════════════════
-- Las cantidades son siempre en "paquetes".
-- Sé directo, amable y eficiente.
-- Si el mensaje no es un pedido (saludos, preguntas, etc), respondé amablemente que estás para anotar pedidos.
-- Si hay mucha ambigüedad, preguntá antes de registrar. Si está claro, anotalo de una.
-- No uses emojis excesivos, solo el ✅ de confirmación.
+- Si el mensaje parece una transcripción de audio (puede tener errores de puntuación), interpretalo con flexibilidad.
+- El estado de pago es CRUCIAL. Si el operador dice "Anotame 2 de pollo para Juan, ya me los pagó", asegurate de pasar isPaid: true.
+- Si el operador dice "Anotame 2 de pollo para Juan", pasá isPaid: false.
 `;
 
 export async function processOperatorMessage(whatsapp: string, message: string) {
@@ -72,7 +55,7 @@ export async function processOperatorMessage(whatsapp: string, message: string) 
 
   try {
     const result = await generateText({
-      model: google('gemini-2.5-flash'),
+      model: google('gemini-1.5-flash'),
       system: SYSTEM_PROMPT,
       messages: [
         ...history,
