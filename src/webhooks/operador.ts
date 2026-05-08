@@ -27,7 +27,9 @@ export const operatorWebhook = async (req: Request, res: Response) => {
   // El texto puede estar en conversation, extendedTextMessage, etc.
   const text = messageData.message?.conversation || 
                messageData.message?.extendedTextMessage?.text || 
-               messageData.message?.imageMessage?.caption || "";
+               messageData.message?.imageMessage?.caption || 
+               messageData.message?.videoMessage?.caption ||
+               messageData.message?.documentMessage?.caption || "";
   
   const remoteJid = messageData.key.remoteJid;
   if (!remoteJid) {

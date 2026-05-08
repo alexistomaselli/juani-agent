@@ -2,7 +2,7 @@ import { google } from '@ai-sdk/google';
 import { generateText } from 'ai';
 import { dashboardTools } from '../tools/dashboardTools.js';
 import { conversationStore } from '../memory/conversationStore.js';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 
 dotenv.config();
 

@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 import { operatorWebhook } from './webhooks/operador.js';
 import { publicWebhook } from './webhooks/publico.js';
 

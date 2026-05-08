@@ -24,7 +24,9 @@ export const publicWebhook = async (req: Request, res: Response) => {
 
   const text = messageData.message?.conversation || 
                messageData.message?.extendedTextMessage?.text || 
-               messageData.message?.imageMessage?.caption || "";
+               messageData.message?.imageMessage?.caption || 
+               messageData.message?.videoMessage?.caption ||
+               messageData.message?.documentMessage?.caption || "";
   
   const remoteJid = messageData.key.remoteJid;
   if (!remoteJid) {
