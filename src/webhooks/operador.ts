@@ -45,8 +45,20 @@ export const operatorWebhook = async (req: Request, res: Response) => {
     .map((n) => n.trim())
     .filter((n) => n.length > 0);
   
-  if (allowedNumbers.length > 0 && !allowedNumbers.includes(whatsappNumber)) {
-    console.log(`⚠️ [OPERADOR] Acceso DENEGADO para el número: ${whatsappNumber}. Permitidos: ${allowedNumbers.length} números.`);
+  const isAllowed = allowedNumbers.length === 0 || allowedNumbers.some(allowed => {
+    if (whatsappNumber === allowed) return true;
+    // Manejo de números de Argentina (con o sin el '9' después del '54')
+    if (whatsappNumber.startsWith('549') && allowed.startsWith('54') && !allowed.startsWith('549')) {
+      return whatsappNumber.replace('549', '54') === allowed;
+    }
+    if (allowed.startsWith('549') && whatsappNumber.startsWith('54') && !whatsappNumber.startsWith('549')) {
+      return allowed.replace('549', '54') === whatsappNumber;
+    }
+    return false;
+  });
+  
+  if (!isAllowed) {
+    console.log(`⚠️ [OPERADOR] Acceso DENEGADO para el número: ${whatsappNumber}. Permitidos: ${allowedNumbers.join(', ')}`);
     return res.status(200).send('Unauthorized number');
   }
   

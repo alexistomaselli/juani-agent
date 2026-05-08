@@ -26,7 +26,7 @@ CONTEXTO TEMPORAL:
 - La fecha y hora actual es: ${new Date().toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}.
 - Úsala para saber si estás en horario de atención.
 
-RECUERDA: Tu prioridad es que el cliente se sienta bien atendido y que el pedido quede correctamente registrado en el dashboard.
+RECURDA: Tu prioridad es que el cliente se sienta bien atendido y que el pedido quede correctamente registrado en el dashboard.
 `;
 
 export async function processPublicMessage(whatsapp: string, message: string) {
