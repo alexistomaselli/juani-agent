@@ -26,6 +26,18 @@ export const operatorWebhook = async (req: Request, res: Response) => {
   const remoteJid = messageData.key.remoteJid;
   const whatsappNumber = remoteJid.split('@')[0];
 
+  // 3. Validar que el número esté autorizado
+  const allowedNumbers = process.env.ALLOWED_OPERATORS?.split(',').map(n => n.trim()).filter(n => n.length > 0) || [];
+  
+  if (allowedNumbers.length > 0 && !allowedNumbers.includes(whatsappNumber)) {
+    console.log(`⚠️ [OPERADOR] Acceso DENEGADO para el número: ${whatsappNumber}. Permitidos: ${allowedNumbers.length} números.`);
+    return res.status(200).send('Unauthorized number');
+  }
+  
+  if (allowedNumbers.length === 0) {
+    console.log(`⚠️ [OPERADOR] ATENCIÓN: No hay operadores configurados en ALLOWED_OPERATORS. El acceso es LIBRE.`);
+  }
+
   if (!text) {
     return res.status(200).send('No text found');
   }
