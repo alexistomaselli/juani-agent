@@ -163,4 +163,32 @@ export const dashboardTools = {
       }
     },
   }),
+
+  verificar_pedidos_pendientes: tool({
+    description: 'Verifica si un número de WhatsApp ya tiene pedidos pendientes (status PENDING) en el sistema.',
+    parameters: z.object({
+      whatsapp: z.string().describe('Número de WhatsApp a verificar (sin prefijo ni sufijos)'),
+    }),
+    execute: async (params) => {
+      try {
+        console.log('Verificando pedidos pendientes para:', params.whatsapp);
+        const { data, error } = await supabase
+          .from('Order')
+          .select('id, orderNumber, product, quantity, totalAmount, status, createdAt')
+          .eq('whatsapp', params.whatsapp)
+          .eq('status', 'PENDING')
+          .order('createdAt', { ascending: false });
+
+        if (error) throw error;
+
+        return {
+          hasPendingOrders: data && data.length > 0,
+          pendingOrders: data || [],
+        };
+      } catch (error: any) {
+        console.error('Error en verificar_pedidos_pendientes:', error.message);
+        return { error: 'No se pudo verificar el estado de los pedidos.' };
+      }
+    },
+  }),
 };

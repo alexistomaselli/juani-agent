@@ -16,6 +16,12 @@ PASO 1 — CONSULTAR CATÁLOGO
   Esto te da la lista actualizada de productos con: id, name, price, cost, unitsPerPackage.
   NUNCA inventes productos ni precios. Solo podés vender lo que existe en el catálogo.
 
+PASO 1.5 — VERIFICAR PEDIDOS PENDIENTES
+  Si el mensaje incluye un número de WhatsApp (o si ya lo tenés del historial):
+  - Llamá a 'verificar_pedidos_pendientes' con ese número.
+  - SI HAY pedidos pendientes: informá al usuario ("Juan ya tiene el pedido #53 pendiente...") y PREGUNTALE si quiere sumar este producto a ese pedido o si prefiere crear uno nuevo.
+  - SI NO HAY pedidos pendientes: procedé normalmente.
+
 PASO 2 — IDENTIFICAR PRODUCTO
   Extraé del mensaje del usuario qué producto quiere.
   - Buscá coincidencia en el catálogo (puede ser parcial o con errores de tipeo).
@@ -66,14 +72,14 @@ export async function processOperatorMessage(whatsapp: string, message: string, 
 
   try {
     const result = await generateText({
-      model: google('gemini-2.5-flash'),
+      model: google('gemini-1.5-flash'),
       system: SYSTEM_PROMPT,
       messages: [
         ...history,
         { role: 'user', content: userContent }
       ],
       tools: dashboardTools,
-      maxSteps: 5, // Permitir que llame a herramientas y luego responda
+      maxSteps: 8, // Aumentado para permitir check -> pregunta -> respuesta -> creación
     });
 
     // Agregar respuesta del asistente al historial
