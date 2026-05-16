@@ -1,15 +1,17 @@
 import axios from 'axios';
 
-const API_URL = process.env.EVOLUTION_API_URL;
+const API_URL = process.env.EVOLUTION_API_URL?.replace(/\/$/, '');
 const API_KEY = process.env.EVOLUTION_API_KEY;
 
 export const evolutionApi = {
   sendText: async (instance: string, number: string, text: string) => {
+    // Evolution expects a plain number, not a JID (strip @s.whatsapp.net if present)
+    const cleanNumber = number.includes('@') ? number.split('@')[0] : number;
     try {
       const response = await axios.post(
         `${API_URL}/message/sendText/${instance}`,
         {
-          number,
+          number: cleanNumber,
           text,
           delay: 1200,
           linkPreview: false

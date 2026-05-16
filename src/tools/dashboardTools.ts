@@ -1,6 +1,7 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import { supabase } from '../lib/supabase.js';
+import { randomUUID } from 'crypto';
 
 export const dashboardTools = {
   listar_productos: tool({
@@ -100,6 +101,7 @@ export const dashboardTools = {
         const { data: order, error: orderErr } = await supabase
           .from('Order')
           .insert({
+            id: randomUUID(),
             customerName: params.customerName,
             whatsapp: params.whatsapp || '',
             customerId,
