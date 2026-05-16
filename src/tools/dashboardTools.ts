@@ -37,6 +37,7 @@ export const dashboardTools = {
     execute: async (params) => {
       try {
         // 1. Buscar o crear el cliente
+        console.log('Creando pedido para:', params.customerName, 'WhatsApp:', params.whatsapp);
         let customerId: string | null = null;
 
         if (params.whatsapp) {
@@ -44,18 +45,20 @@ export const dashboardTools = {
             .from('Customer')
             .select('id, name')
             .eq('whatsapp', params.whatsapp)
-            .single();
+            .maybeSingle();
 
           if (existing) {
+            console.log('Cliente existente encontrado:', existing.id);
             customerId = existing.id;
-            // Actualizar nombre si cambió
-            if (existing.name !== params.customerName) {
+            // Actualizar nombre si cambió significativamente
+            if (existing.name !== params.customerName && params.customerName.length > 3) {
               await supabase
                 .from('Customer')
                 .update({ name: params.customerName, updatedAt: new Date().toISOString() })
                 .eq('id', customerId);
             }
           } else {
+            console.log('Creando nuevo cliente...');
             const { data: newCustomer, error: custErr } = await supabase
               .from('Customer')
               .insert({ name: params.customerName, whatsapp: params.whatsapp })
@@ -75,15 +78,31 @@ export const dashboardTools = {
           customerId = newCustomer!.id;
         }
 
-        // 2. Obtener precio del producto
-        const { data: product, error: prodErr } = await supabase
+        // 2. Obtener precio del producto (mejorado: busca por ID o por nombre)
+        console.log('Buscando producto:', params.product, 'ID:', params.productId);
+        let { data: product, error: prodErr } = await supabase
           .from('Product')
-          .select('price, cost, unitsPerPackage, name')
+          .select('id, price, cost, unitsPerPackage, name')
           .eq('id', params.productId)
-          .single();
+          .maybeSingle();
+
+        // Si no encontró por ID, intentamos por nombre (fuzzy match simple)
+        if (!product) {
+          console.log('Producto no encontrado por ID, intentando por nombre...');
+          const { data: searchResult } = await supabase
+            .from('Product')
+            .select('id, price, cost, unitsPerPackage, name')
+            .ilike('name', `%${params.product.split(' ')[0]}%`)
+            .eq('active', true)
+            .limit(1)
+            .maybeSingle();
+          
+          product = searchResult;
+        }
 
         if (prodErr || !product) {
-          return { success: false, error: 'Producto no encontrado en la base de datos.' };
+          console.error('Producto no encontrado:', params.product);
+          return { success: false, error: `El producto "${params.product}" no fue encontrado en el catálogo. Por favor, verificá el nombre.` };
         }
 
         const totalAmount = product.price * params.quantity;
@@ -96,16 +115,18 @@ export const dashboardTools = {
           .limit(1);
 
         const nextNumber = (maxOrder?.[0]?.orderNumber || 0) + 1;
+        console.log('Número de pedido asignado:', nextNumber);
 
         // 4. Crear el pedido
+        const newOrderId = randomUUID();
         const { data: order, error: orderErr } = await supabase
           .from('Order')
           .insert({
-            id: randomUUID(),
+            id: newOrderId,
             customerName: params.customerName,
             whatsapp: params.whatsapp || '',
             customerId,
-            productId: params.productId,
+            productId: product.id,
             product: product.name,
             quantity: params.quantity,
             unitPrice: product.price,
@@ -121,7 +142,12 @@ export const dashboardTools = {
           .select('id, orderNumber, product, quantity, totalAmount, isPaid')
           .single();
 
-        if (orderErr) throw orderErr;
+        if (orderErr) {
+          console.error('Error al insertar el pedido:', orderErr);
+          throw orderErr;
+        }
+
+        console.log('Pedido creado exitosamente:', order.orderNumber);
 
         return {
           success: true,
@@ -129,10 +155,10 @@ export const dashboardTools = {
           message: `✅ Pedido #${order!.orderNumber} registrado: ${order!.quantity}x ${order!.product} ($${order!.totalAmount?.toLocaleString()}) para ${params.customerName}.${order!.isPaid ? ' 💰 Marcado como pagado.' : ' ⏳ Pendiente de cobro.'}`,
         };
       } catch (error: any) {
-        console.error('Error creating order:', error.message);
+        console.error('Error en crear_pedido:', error);
         return {
           success: false,
-          error: `No se pudo crear el pedido: ${error.message}`,
+          error: `Error técnico al crear el pedido: ${error.message || 'Desconocido'}`,
         };
       }
     },
