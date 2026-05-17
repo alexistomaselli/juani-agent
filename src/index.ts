@@ -15,6 +15,7 @@ app.get('/health', (req: Request, res: Response) => {
   res.json({ 
     status: 'ok', 
     service: 'juani-agent',
+    version: '1.0.1-check-deploy',
     config: {
       supabaseConfigured: !!process.env.SUPABASE_URL && !!process.env.SUPABASE_ANON_KEY,
       allowedOperatorsSet: !!process.env.ALLOWED_OPERATORS,
