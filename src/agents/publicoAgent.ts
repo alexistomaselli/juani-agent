@@ -125,10 +125,10 @@ export async function processPublicMessage(whatsapp: string, message: string) {
   console.log(`⏰ [PUBLICO] Estado de Juani: ${statusInfo.dateTimeStr} - Escuela: ${statusInfo.isSchoolTime}`);
 
   // 2. Obtener historial
-  const history = conversationStore.getHistory(whatsapp);
+  const history = await conversationStore.getHistory(whatsapp);
   
   // 3. Agregar mensaje del usuario al historial
-  conversationStore.addMessage(whatsapp, { role: 'user', content: message });
+  await conversationStore.addMessage(whatsapp, { role: 'user', content: message });
 
   try {
     // 4. Generar system prompt dinámico
@@ -146,7 +146,7 @@ export async function processPublicMessage(whatsapp: string, message: string) {
     });
 
     // 5. Agregar respuesta del asistente al historial
-    conversationStore.addMessage(whatsapp, { role: 'assistant', content: result.text });
+    await conversationStore.addMessage(whatsapp, { role: 'assistant', content: result.text });
 
     return result.text;
   } catch (error) {

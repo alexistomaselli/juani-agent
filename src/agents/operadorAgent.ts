@@ -58,7 +58,7 @@ NOTAS SOBRE AUDIO Y PAGOS
 
 export async function processOperatorMessage(whatsapp: string, message: string, audioData?: string) {
   // Obtener historial
-  const history = conversationStore.getHistory(whatsapp);
+  const history = await conversationStore.getHistory(whatsapp);
 
   // Preparar el contenido del mensaje
   const userContent: any[] = [{ type: 'text', text: message || "Procesa este audio para registrar el pedido." }];
@@ -72,7 +72,7 @@ export async function processOperatorMessage(whatsapp: string, message: string, 
   }
 
   // Agregar mensaje del usuario al historial (como texto para la memoria)
-  conversationStore.addMessage(whatsapp, { role: 'user', content: message || "[Audio enviado]" });
+  await conversationStore.addMessage(whatsapp, { role: 'user', content: message || "[Audio enviado]" });
 
   try {
     const result = await generateText({
@@ -87,7 +87,7 @@ export async function processOperatorMessage(whatsapp: string, message: string, 
     });
 
     // Agregar respuesta del asistente al historial
-    conversationStore.addMessage(whatsapp, { role: 'assistant', content: result.text });
+    await conversationStore.addMessage(whatsapp, { role: 'assistant', content: result.text });
 
     return result.text;
   } catch (error) {
