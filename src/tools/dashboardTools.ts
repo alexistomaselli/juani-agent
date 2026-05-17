@@ -33,35 +33,51 @@ export const dashboardTools = {
       productId: z.string().describe('ID del producto del catálogo'),
       quantity: z.number().describe('Cantidad de paquetes pedidos'),
       isPaid: z.boolean().optional().describe('true si el cliente ya pagó, false si está pendiente de cobro'),
+      deliveryAddress: z.string().optional().describe('Dirección de entrega del pedido (calle, número, etc.)'),
     }),
     execute: async (params) => {
       try {
         // 1. Buscar o crear el cliente
-        console.log('Creando pedido para:', params.customerName, 'WhatsApp:', params.whatsapp);
+        console.log('Creando pedido para:', params.customerName, 'WhatsApp:', params.whatsapp, 'Dirección:', params.deliveryAddress);
         let customerId: string | null = null;
 
         if (params.whatsapp) {
           const { data: existing } = await supabase
             .from('Customer')
-            .select('id, name')
+            .select('id, name, address')
             .eq('whatsapp', params.whatsapp)
             .maybeSingle();
 
           if (existing) {
             console.log('Cliente existente encontrado:', existing.id);
             customerId = existing.id;
-            // Actualizar nombre si cambió significativamente
+            
+            // Actualizar nombre y dirección si cambiaron
+            const updates: any = { updatedAt: new Date().toISOString() };
+            let needUpdate = false;
             if (existing.name !== params.customerName && params.customerName.length > 3) {
+              updates.name = params.customerName;
+              needUpdate = true;
+            }
+            if (params.deliveryAddress && existing.address !== params.deliveryAddress && params.deliveryAddress.length > 3) {
+              updates.address = params.deliveryAddress;
+              needUpdate = true;
+            }
+            if (needUpdate) {
               await supabase
                 .from('Customer')
-                .update({ name: params.customerName, updatedAt: new Date().toISOString() })
+                .update(updates)
                 .eq('id', customerId);
             }
           } else {
             console.log('Creando nuevo cliente...');
             const { data: newCustomer, error: custErr } = await supabase
               .from('Customer')
-              .insert({ name: params.customerName, whatsapp: params.whatsapp })
+              .insert({ 
+                name: params.customerName, 
+                whatsapp: params.whatsapp,
+                address: params.deliveryAddress || null
+              })
               .select('id')
               .single();
             if (custErr) throw custErr;
@@ -71,7 +87,10 @@ export const dashboardTools = {
           // Sin whatsapp: crear cliente anónimo
           const { data: newCustomer, error: custErr } = await supabase
             .from('Customer')
-            .insert({ name: params.customerName })
+            .insert({ 
+              name: params.customerName,
+              address: params.deliveryAddress || null
+            })
             .select('id')
             .single();
           if (custErr) throw custErr;
@@ -136,6 +155,7 @@ export const dashboardTools = {
             status: 'PENDING',
             orderNumber: nextNumber,
             deliverySequence: nextNumber,
+            deliveryAddress: params.deliveryAddress || null,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           })

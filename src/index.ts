@@ -15,7 +15,7 @@ app.get('/health', (req: Request, res: Response) => {
   res.json({ 
     status: 'ok', 
     service: 'juani-agent',
-    version: '1.0.2-fix-dynamic-placeholder',
+    version: '1.1.0-public-agent-dynamic-schedule-and-delivery',
     config: {
       supabaseConfigured: !!process.env.SUPABASE_URL && !!process.env.SUPABASE_ANON_KEY,
       allowedOperatorsSet: !!process.env.ALLOWED_OPERATORS,
