@@ -19,7 +19,11 @@ PASO 1 — CONSULTAR CATÁLOGO
 PASO 1.5 — VERIFICAR PEDIDOS PENDIENTES
   Si el mensaje incluye un número de WhatsApp (o si ya lo tenés del historial):
   - Llamá a 'verificar_pedidos_pendientes' con ese número.
-  - SI HAY pedidos pendientes: informá al usuario ("Juan ya tiene el pedido #53 pendiente...") y PREGUNTALE si quiere sumar este producto a ese pedido o si prefiere crear uno nuevo.
+  - SI LA HERRAMIENTA DEVUELVE QUE HAY pedidos pendientes (hasPendingOrders: true):
+    * Usá los datos REALES devueltos por la herramienta (el nombre del cliente real, el número de pedido real, el producto y la cantidad).
+    * NUNCA inventes nombres ni uses los ejemplos de esta instrucción de forma literal.
+    * Informá al operador de manera dinámica, por ejemplo: "[Nombre del Cliente] ya tiene el pedido #[Número de Pedido] pendiente con [Cantidad] de [Producto]. ¿Querés sumar este producto a ese pedido o preferís crear uno nuevo?"
+    * Esperá la respuesta del operador antes de proceder.
   - SI NO HAY pedidos pendientes: procedé normalmente.
 
 PASO 2 — IDENTIFICAR PRODUCTO
