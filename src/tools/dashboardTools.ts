@@ -211,4 +211,100 @@ export const dashboardTools = {
       }
     },
   }),
+
+  buscar_cliente_por_whatsapp: tool({
+    description: 'Busca a un cliente en la base de datos usando su número de WhatsApp. Útil para verificar si ya tenemos su nombre y dirección.',
+    parameters: z.object({
+      whatsapp: z.string().describe('Número de WhatsApp a verificar (sin prefijo +)'),
+    }),
+    execute: async (params) => {
+      try {
+        const { data, error } = await supabase
+          .from('Customer')
+          .select('id, name, address, whatsapp')
+          .eq('whatsapp', params.whatsapp)
+          .maybeSingle();
+
+        if (error) throw error;
+        return { exists: !!data, customer: data };
+      } catch (error: any) {
+        console.error('Error buscando cliente:', error.message);
+        return { error: 'No se pudo buscar al cliente.' };
+      }
+    },
+  }),
+
+  buscar_ultimo_pedido: tool({
+    description: 'Busca el último pedido (o los más recientes) realizado por un número de WhatsApp. Útil para consultar estado o para modificar un pedido recién hecho.',
+    parameters: z.object({
+      whatsapp: z.string().describe('Número de WhatsApp del cliente (sin prefijo +)'),
+    }),
+    execute: async (params) => {
+      try {
+        const { data, error } = await supabase
+          .from('Order')
+          .select('id, orderNumber, product, quantity, totalAmount, status, isPaid, deliveryAddress, createdAt')
+          .eq('whatsapp', params.whatsapp)
+          .order('createdAt', { ascending: false })
+          .limit(3);
+
+        if (error) throw error;
+        return { orders: data || [] };
+      } catch (error: any) {
+        console.error('Error buscando último pedido:', error.message);
+        return { error: 'No se pudieron buscar los pedidos.' };
+      }
+    },
+  }),
+
+  modificar_pedido: tool({
+    description: 'Modifica un pedido existente (solo si su estado es PENDING). Permite cambiar cantidad, dirección o marcarlo como CANCELLED.',
+    parameters: z.object({
+      orderId: z.string().describe('ID único del pedido (UUID) a modificar'),
+      quantity: z.number().optional().describe('Nueva cantidad de paquetes'),
+      deliveryAddress: z.string().optional().describe('Nueva dirección de entrega'),
+      status: z.enum(['PENDING', 'CANCELLED']).optional().describe('Para cancelar el pedido, envía CANCELLED'),
+    }),
+    execute: async (params) => {
+      try {
+        // Primero, obtener el pedido actual para recalcular totalAmount si cambia la cantidad
+        const { data: order, error: orderErr } = await supabase
+          .from('Order')
+          .select('id, unitPrice, status')
+          .eq('id', params.orderId)
+          .maybeSingle();
+          
+        if (orderErr || !order) return { success: false, error: 'Pedido no encontrado.' };
+        if (order.status !== 'PENDING' && params.status !== 'CANCELLED') {
+           return { success: false, error: 'Solo se pueden modificar pedidos en estado PENDING.' };
+        }
+
+        const updates: any = { updatedAt: new Date().toISOString() };
+        if (params.quantity !== undefined) {
+          updates.quantity = params.quantity;
+          updates.totalAmount = params.quantity * order.unitPrice;
+        }
+        if (params.deliveryAddress !== undefined) updates.deliveryAddress = params.deliveryAddress;
+        if (params.status !== undefined) updates.status = params.status;
+
+        const { data: updatedOrder, error: updateErr } = await supabase
+          .from('Order')
+          .update(updates)
+          .eq('id', params.orderId)
+          .select('id, orderNumber, product, quantity, totalAmount, status, deliveryAddress')
+          .single();
+
+        if (updateErr) throw updateErr;
+
+        return {
+          success: true,
+          order: updatedOrder,
+          message: `✅ Pedido #${updatedOrder.orderNumber} modificado exitosamente.`
+        };
+      } catch (error: any) {
+        console.error('Error modificando pedido:', error.message);
+        return { success: false, error: 'Error técnico al modificar el pedido.' };
+      }
+    },
+  }),
 };

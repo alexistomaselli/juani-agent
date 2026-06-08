@@ -8,26 +8,18 @@ async function runTest() {
   await conversationStore.clearHistory(WHATSAPP);
   console.log('🧹 Historial limpiado\n');
 
-  // === Conversación real de Mariela ===
+  // === Conversación dinámica ===
   const turns = [
-    'Hola',
-    'Quisiera encargar pizzas',
-    'Si si',
-    '1 paquete',
-    'Mariela a Matheu 757',
-    'Sisi',  // ← aquí el bot olvidaba todo y pedía nombre+dirección de nuevo
+    'Hola, qué venden?',
+    'Quiero 2 paquetes de pizzetas',
+    'Soy Alexis y mi direccion es Matheu 755',
+    'Me equivoqué, quiero cambiar mi pedido a 3 paquetes por favor',
   ];
 
   for (const msg of turns) {
     console.log(`📱 Cliente: "${msg}"`);
     const reply = await processPublicMessage(WHATSAPP, msg);
     console.log(`🤖 Juani: "${reply}"\n`);
-
-    // Si ya creó el pedido, terminamos
-    if (reply.includes('#') && reply.toLowerCase().includes('pedido')) {
-      console.log('✅ ÉXITO: Pedido creado!');
-      break;
-    }
   }
 }
 

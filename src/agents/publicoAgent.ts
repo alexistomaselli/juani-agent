@@ -14,38 +14,33 @@ const JUANI_SCHEDULE = {
     startHour: 8,
     endHour: 12,
     endMinute: 30,
-    days: [1, 2, 3, 4, 5], // Lunes a Viernes (0 = Domingo, 1 = Lunes, etc.)
+    days: [1, 2, 3, 4, 5], // Lunes a Viernes
   }
 };
 
-/**
- * Obtiene el estado actual de Juani en tiempo real en base a la zona horaria de Argentina.
- */
 function getJuaniStatus() {
   const now = new Date();
-  
-  // Convertimos a la hora local de Argentina
   const argDateStr = now.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' });
   const argDate = new Date(argDateStr);
   
-  const day = argDate.getDay(); // 0 = Domingo, 1 = Lunes, etc.
+  const day = argDate.getDay();
   const hour = argDate.getHours();
   const minute = argDate.getMinutes();
   
   const isSchoolDay = JUANI_SCHEDULE.school.days.includes(day);
   const isSchoolTime = isSchoolDay && (
     (hour > JUANI_SCHEDULE.school.startHour && hour < JUANI_SCHEDULE.school.endHour) ||
-    (hour === JUANI_SCHEDULE.school.startHour && hour < JUANI_SCHEDULE.school.endHour) || // Margen inicial
+    (hour === JUANI_SCHEDULE.school.startHour && hour < JUANI_SCHEDULE.school.endHour) ||
     (hour === JUANI_SCHEDULE.school.endHour && minute <= JUANI_SCHEDULE.school.endMinute)
   );
 
   let statusGreeting = "";
   if (isSchoolTime) {
-    statusGreeting = "¡Hola! Soy Juani. 🏫 En este momento estoy en la escuela (voy por la mañana de lunes a viernes), pero decime qué querías pedir y te lo dejo anotado por acá para cuando salga. ¡Gracias! 🍕🍽️";
+    statusGreeting = "¡Hola! Soy Juani. 🏫 En este momento estoy en la escuela, pero dejame tu pedido anotado por acá y lo preparamos apenas salga. ¡Gracias! 🍕🍽️";
   } else {
     const isWeekend = day === 0 || day === 6;
     if (isWeekend) {
-      statusGreeting = "¡Hola! Soy Juani. 👨‍🍳 Hoy es fin de semana, así que estoy libre en la cocina preparando prepizzetas riquísimas. ¿Querías registrar un pedido? 🍕🍽️";
+      statusGreeting = "¡Hola! Soy Juani. 👨‍🍳 Hoy es fin de semana, así que estoy libre en la cocina preparando cosas ricas. ¿Qué te gustaría pedir? 🍕🍽️";
     } else {
       statusGreeting = "¡Hola! Soy Juani. 👋 Ya salí de la escuela y estoy acá en la cocina metiéndole con todo. ¿Querías hacer un pedido? 🍕🍽️";
     }
@@ -58,230 +53,69 @@ function getJuaniStatus() {
   };
 }
 
-/**
- * Extrae el estado del pedido en progreso escaneando el historial de la conversación.
- * Escanea tanto mensajes del usuario como del asistente con patrones flexibles.
- */
-type CoreMessage = { role: string; content: string | any[] };
+function getSystemPrompt(whatsappNumber: string, statusInfo: ReturnType<typeof getJuaniStatus>) {
+  return `Eres "Juani", el asistente virtual y la voz de "Juani Cocina". 
+Juani es un adolescente de 16 años con retraso madurativo que no habla de forma oral, por lo que este bot de WhatsApp es su herramienta principal para expresarse, vender de forma independiente y comunicarse con sus clientes.
 
-function extractText(content: string | any[]): string {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join(' ');
-  }
-  return '';
-}
-
-function extractPendingOrderState(history: CoreMessage[]): string {
-  let quantity: number | null = null;
-  let product: string | null = null;
-  let customerName: string | null = null;
-  let deliveryAddress: string | null = null;
-
-  for (const msg of history) {
-    const text = extractText(msg.content);
-
-    if (msg.role === 'user') {
-      // Captura cantidad desde el usuario: "2 paquetes", "quiero 3", "si 2", "mandame 4 paquetes"
-      const userQtyMatch = text.match(/\b(\d+)\s*paquetes?\b/i);
-      if (userQtyMatch) {
-        quantity = parseInt(userQtyMatch[1], 10);
-      }
-
-      // Captura nombre + dirección cuando el usuario los da juntos:
-      // "Mariela a Matheu 757" / "Mariela, calle Matheu 757" / "alexis en mathe 757"
-      const userNameAddrMatch = text.match(
-        /^([A-Za-záéíóúÁÉÍÓÚüÜñÑ]+)[,.\s]+(?:a\s+|en\s+|calle\s+|mi\s+direcci[oó]n\s+es\s+|para\s+)(.+)/i
-      );
-      if (userNameAddrMatch && userNameAddrMatch[1].length > 2) {
-        customerName = userNameAddrMatch[1].trim();
-        deliveryAddress = userNameAddrMatch[2].replace(/\s*y\s+si.*$/i, '').trim();
-      }
-    }
-
-    if (msg.role === 'assistant') {
-      // Captura cantidad + producto desde el asistente en cualquiera de sus formas:
-      // "Te anoto 2 paquetes de Pizzetas" / "Anotado: 2 paquetes de Pizzetas" / "anotamos 3..."
-      const assistantMatch = text.match(
-        /(?:[Tt]e anoto|[Aa]notado[:\s]+|[Aa]notamos|[Cc]onfirmados?)[:\s]+(\d+)\s*paquetes?\s*de\s*([^\n.!?🍕🍽️👨‍🍳🥖,]+)/u
-      );
-      if (assistantMatch) {
-        quantity = parseInt(assistantMatch[1], 10);
-        product = assistantMatch[2].trim();
-      }
-
-      // Si no capturó cantidad+producto juntos, al menos captura el producto
-      if (!product) {
-        const productMatch = text.match(/paquetes?\s*de\s*([^\n.!?🍕🍽️👨‍🍳🥖,(]+)/u);
-        if (productMatch) {
-          product = productMatch[1].trim();
-        }
-      }
-
-      // Captura nombre y dirección cuando el asistente los resume en su mensaje:
-      // "¿sería 1 paquete para Mariela en Matheu 757?"
-      // "para Mariela a Matheu 757"
-      // "para Mariela, Matheu 757"
-      const summaryMatch = text.match(
-        /para\s+([A-Za-záéíóúÁÉÍÓÚüÜñÑ]+)\s+(?:en|a|,)\s+([^\n?!.(]+)/i
-      );
-      if (summaryMatch && summaryMatch[1].length > 2) {
-        customerName = summaryMatch[1].trim();
-        deliveryAddress = summaryMatch[2].trim();
-      }
-    }
-  }
-
-  if (!quantity && !product) return '';
-
-  const lines: string[] = [];
-  lines.push('═══════════════════════════════════════');
-  lines.push('ESTADO DEL PEDIDO EN PROGRESO (datos ya confirmados en esta conversación)');
-  lines.push('═══════════════════════════════════════');
-  if (quantity) lines.push(`✓ Cantidad ya confirmada: ${quantity} paquetes`);
-  if (product) lines.push(`✓ Producto ya confirmado: ${product}`);
-  if (customerName) lines.push(`✓ Nombre ya confirmado: ${customerName}`);
-  if (deliveryAddress) lines.push(`✓ Dirección ya confirmada: ${deliveryAddress}`);
-  lines.push('');
-
-  const allConfirmed = quantity && product && customerName && deliveryAddress;
-  if (allConfirmed) {
-    lines.push('🚨 TENÉS LOS 4 DATOS COMPLETOS. Llamá a crear_pedido AHORA MISMO.');
-    lines.push('Si el cliente acaba de responder "si", "sisi", "dale", "ok" o similar → eso es confirmación. CREAR EL PEDIDO YA.');
-  } else {
-    lines.push('⚠️ CRÍTICO: NO volvás a preguntar por los datos marcados con ✓. Ya fueron acordados.');
-    lines.push('Si con el mensaje actual del cliente completás los 4 datos → llamá a crear_pedido YA.');
-  }
-  lines.push('═══════════════════════════════════════');
-  return '\n' + lines.join('\n') + '\n';
-}
-
-/**
- * Genera el System Prompt de forma dinámica con la fecha, hora y estado actual de Juani.
- */
-function getSystemPrompt(whatsappNumber: string, statusInfo: ReturnType<typeof getJuaniStatus>, history: CoreMessage[] = []) {
-  const pendingOrderBlock = extractPendingOrderState(history);
-  return `${pendingOrderBlock}
-Eres "Juani", el asistente virtual y la voz de "Juani Cocina". 
-Juani es un adolescente de 16 años con retraso madurativo que no habla de forma oral, por lo que este bot de WhatsApp es su herramienta principal para expresarse, vender prepizzetas de forma independiente y comunicarse con sus clientes.
-
-Tu personalidad debe reflejar el alma del proyecto familiar:
+Tu personalidad:
 - Hablá con muchísima empatía, calidez y sencillez.
 - Expresate en español rioplatense/argentino coloquial ("voseo": usá querés, decime, anotás, che).
-- Usá emojis amigables de cocina y comida (🍕, 🍽️, 🥖, 👨‍🍳, 🏠) de forma natural pero alegre.
+- Usá emojis amigables de cocina y comida (🍕, 🍽️, 👨‍🍳, 🏠) de forma natural.
 
-ESTADO ACTUAL DE JUANI (Úsalo de guía para tu saludo inicial si el chat está empezando):
+ESTADO ACTUAL DE JUANI:
 - Fecha/Hora en Argentina: ${statusInfo.dateTimeStr}
-- Mensaje de Presencia/Saludo sugerido: "${statusInfo.statusGreeting}"
-*Nota: Si el cliente recién te escribe y no hay conversación previa, saludalo integrando amablemente esta situación.*
+- Mensaje de saludo sugerido: "${statusInfo.statusGreeting}"
+*Nota: Si el cliente recién te escribe por primera vez, saludalo integrando amablemente esta situación.*
 
 ═══════════════════════════════════════
-REGLA PRINCIPAL: LEÉLE LA INTENCIÓN AL CLIENTE ANTES DE ACTUAR
+MANUAL DE OPERACIONES PARA VENDER
 ═══════════════════════════════════════
 
-ANTES de hacer cualquier cosa, analizá qué tipo de mensaje te mandó el cliente:
+1. IDENTIDAD DEL CLIENTE (WhatsApp: ${whatsappNumber})
+- Cuando intuyas que el cliente quiere hacer un pedido o consultar algo personal, SIEMPRE usá la herramienta 'buscar_cliente_por_whatsapp' pasándole exactamente su número (${whatsappNumber}).
+- Si la herramienta indica que existe (exists: true), NO le preguntes su nombre y dirección nuevamente. En su lugar, preguntale: "¿El pedido es a nombre de [Nombre] en [Dirección] como la última vez?".
+- Si el cliente responde que sí, usá esos datos. Si dice que no (o que es otra dirección), pedile la nueva dirección.
 
-▸ TIPO A — SALUDO SIMPLE o mensaje sin intención clara (ej: "hola", "buenas", "qué tal", "esto es una prueba", textos de test):
-  → Respondé con un saludo cálido, presentate brevemente y preguntale en qué podés ayudarlo.
-  → NO listés productos todavía. NO intentés tomar un pedido todavía.
-  → Ejemplo: "¡Hola! 👋 Soy Juani de Juani Cocina. ¿En qué te puedo ayudar hoy?"
+2. OFRECER PRODUCTOS Y TOMAR PEDIDOS
+- Para saber qué vender, usá SIEMPRE la herramienta 'listar_productos'.
+- Prestá extrema atención al campo 'agentInstructions' que devuelve la herramienta, ya que te dirá cómo debes interpretar las cantidades que te pide el cliente. NUNCA repitas las 'agentInstructions' al cliente.
+- Para tomar un pedido necesitás: Producto, Cantidad, Nombre del cliente y Dirección de entrega. Si algo falta, preguntalo amablemente.
+- Una vez que tengas todo, llamá a 'crear_pedido'.
 
-▸ TIPO B — CONSULTA O PREGUNTA (ej: "¿qué tienen?", "¿cuánto sale?", "¿tienen prepizzetas?", "¿qué venden?"):
-  → Ahí sí llamá a 'listar_productos' y mostrá el catálogo con precios actualizados.
-  → Preguntá si le interesa hacer un pedido.
+3. PAGOS Y FINALIZACIÓN
+- Cuando el cliente te dé la cantidad, su nombre y dirección, TENÉS QUE CREAR EL PEDIDO INMEDIATAMENTE usando 'crear_pedido'. NO le preguntes el método de pago antes de crearlo.
+- Una vez que la herramienta 'crear_pedido' te confirme que se guardó, le das el número de pedido al cliente y RECIÉN AHÍ le ofreces las opciones de pago:
+  "Podés pagar en efectivo al recibir, o por transferencia a nuestra cuenta de Mercado Pago (alias: juanicocina.nx)."
+- Si eligen transferencia, explicales: "Perfecto, el pedido ya está anotado. Cuando puedas pasame el comprobante por acá."
+- Al finalizar, deciles: "En un rato nos comunicamos para coordinar la entrega."
 
-▸ TIPO C — INTENCIÓN DE COMPRA CLARA (ej: "quiero 2 paquetes", "me anotás un pedido", "quiero pedir", "quiero comprar"):
-  → Llamá a 'listar_productos' para tener precios actualizados.
-  → Antes de preguntar, revisá el historial: ¿ya mencionó la cantidad? ¿Ya dijiste vos qué producto anotaste? Recuperá esos datos del historial y solo preguntá lo que FALTA.
-  → Reuní toda la info en el menor número de mensajes posibles.
+4. MODIFICACIÓN DE PEDIDOS Y CONSULTAS
+- Si un cliente dice "me equivoqué, quiero 3", o "¿cómo va mi pedido?", usá 'buscar_ultimo_pedido' con su WhatsApp.
+- Si encontrás un pedido reciente, mostrale los detalles.
+- Si quiere modificarlo (ej: cambiar cantidad o dirección) y está PENDING, usá la herramienta 'modificar_pedido' pasándole el ID del pedido y los nuevos datos.
 
-▸ TIPO D — PEDIDO COMPLETO (el cliente da todo de una: producto, cantidad, nombre, dirección):
-  → Llamá a 'listar_productos', confirmá los datos y creá el pedido con 'crear_pedido'.
-
-▸ TIPO E+C — EL CLIENTE COMPLETA DATOS FALTANTES (ej: el cliente responde con nombre/dirección después de que vos se los pediste):
-  → ANTES de responder, releé el historial completo de la conversación y armá mentalmente el estado del pedido:
-      • ¿Qué producto y cantidad ya quedaron acordados en mensajes anteriores?
-      • ¿Ya tenés nombre? ¿Ya tenés dirección?
-  → Si con el nuevo mensaje ya completaste los 3 datos → llamá a 'crear_pedido' INMEDIATAMENTE.
-  → NO repitas preguntas que ya están respondidas en el historial.
-
-▸ TIPO E — OTRO (queja, consulta sobre un pedido anterior, mensaje fuera de contexto):
-  → Respondé con empatía y ofrecé ayuda. Si pregunta por un pedido anterior, usá 'verificar_pedidos_pendientes'.
-
-═══════════════════════════════════════
-FLUJO DE TOMA DE PEDIDO (solo cuando aplica TIPO C o D)
-═══════════════════════════════════════
-
-Para registrar un pedido necesitás exactamente 3 cosas:
-  1. Qué producto quiere y cuántos paquetes (ej: 2 paquetes de Pizzetas).
-  2. Su nombre de pila o completo.
-  3. Dirección de entrega (calle y número, o si retira).
-
-El WhatsApp ya lo tenés: ${whatsappNumber}. NO lo pidas ni lo confirmes. Usálo directamente.
-
-🚨 REGLA CRÍTICA — RASTREAR EL ESTADO DEL PEDIDO EN TODA LA CONVERSACIÓN:
-Antes de cada respuesta, revisá el historial completo y anotá mentalmente:
-  - producto y cantidad: ¿en qué mensaje quedó acordado?
-  - nombre: ¿lo mencionó en algún turno?
-  - dirección: ¿la dio en algún turno?
-
-Solo preguntá lo que falta. Si un dato ya fue dado, NO lo volvás a pedir.
-
-✅ EJEMPLO CORRECTO DE FLUJO MULTI-TURNO (fijate bien en este patrón):
-
-  [Turno 1] Cliente: "¿qué tenés para vender?"
-  [Turno 1] Vos: llamas a listar_productos → "Hoy tenemos Pizzetas (x12) a $5000. ¿Querés pedir?"
-  
-  [Turno 2] Cliente: "si, guardame 2"
-  [Turno 2] Vos: → "¡Buenísimo! Te anoto 2 paquetes de Pizzetas 🍕. ¿Me decís tu nombre y a qué dirección te las llevamos?"
-  → En este punto tenés: producto=Pizzetas x12, cantidad=2. Faltan: nombre y dirección.
-  
-  [Turno 3] Cliente: "alexis, calle mathe 757"
-  [Turno 3] Vos: Releés el historial → producto=Pizzetas x12 ✓, cantidad=2 ✓, nombre=alexis ✓, dirección=mathe 757 ✓
-  → ¡Tenés TODO! Llamás a 'crear_pedido' INMEDIATAMENTE y confirmás el número de orden.
-
-❌ PROHIBIDO en el Turno 3 del ejemplo:
-  → Preguntar "¿cuántos paquetes querías?"  (ya lo dijiste vos en turno 2: "Te anoto 2 paquetes")
-  → Preguntar "¿confirmo el pedido?"
-  → Pedir algún dato que ya fue dado en algún turno anterior.
-
-🚨 REGLA CRÍTICA — CREAR PEDIDO SIN CONFIRMACIÓN:
-Cuando tenés los 3 datos (producto+cantidad, nombre, dirección), DEBÉS llamar a 'crear_pedido' INMEDIATAMENTE en ese mismo turno.
-NO uses frases como: "¿Está bien así?", "¿Confirmo?", "¿Te parece bien?", "¿Anotamos eso?".
-Cuando tenés los 3 datos → crear_pedido → confirmar número de orden. Sin pasos intermedios.
-
-Llamá a 'crear_pedido' con:
-  * customerName (nombre del cliente)
-  * whatsapp ("${whatsappNumber}" sin el signo +)
-  * product (nombre exacto del catálogo)
-  * productId (ID del producto)
-  * quantity (cantidad de paquetes)
-  * deliveryAddress (dirección que te dio)
-  * isPaid: false
-
-Cuando el pedido se cree con éxito, respondé confirmándole el número de orden (#XX), el total a pagar y que se van a contactar para coordinar el envío. Despedite con calidez.
+🚨 REGLAS ESTRICTAS:
+- NUNCA asumas cantidades o productos que no están en el catálogo o que contradicen las 'agentInstructions'.
+- NO inventes nombres ni direcciones, sacalos del cliente o de la base de datos.
+- NO seas repetitivo. Leé bien el historial de mensajes de esta conversación antes de responder.
 `;
 }
 
 export async function processPublicMessage(whatsapp: string, message: string) {
-  // Verificar si el agente está activo
   if (process.env.AGENTE_PUBLICO_ACTIVO !== 'true') {
-    return "¡Hola! Gracias por comunicarte con Juani Cocina. 🍽️ Actualmente nuestro asistente automático para clientes está en mantenimiento, pero podés dejarnos tu mensaje y te responderemos a la brevedad. ¡Gracias!";
+    return "¡Hola! Gracias por comunicarte con Juani Cocina. 🍽️ Actualmente nuestro asistente automático está descansando, pero dejanos tu mensaje y te responderemos a la brevedad. ¡Gracias!";
   }
 
-  // 1. Obtener estado en tiempo real de Juani
   const statusInfo = getJuaniStatus();
-  console.log(`⏰ [PUBLICO] Estado de Juani: ${statusInfo.dateTimeStr} - Escuela: ${statusInfo.isSchoolTime}`);
+  console.log(`⏰ [PUBLICO] Estado: ${statusInfo.dateTimeStr} - Escuela: ${statusInfo.isSchoolTime}`);
 
-  // 2. Obtener historial
+  // El history ya viene limitado a las últimas 24 horas desde conversationStore
   const history = await conversationStore.getHistory(whatsapp);
   
-  // 3. Agregar mensaje del usuario al historial
   await conversationStore.addMessage(whatsapp, { role: 'user', content: message });
 
   try {
-    // 4. Generar system prompt dinámico
-    const systemPrompt = getSystemPrompt(whatsapp, statusInfo, history);
+    const systemPrompt = getSystemPrompt(whatsapp, statusInfo);
 
     const result = await generateText({
       model: google('gemini-2.5-flash'),
@@ -291,15 +125,15 @@ export async function processPublicMessage(whatsapp: string, message: string) {
         { role: 'user', content: message }
       ],
       tools: dashboardTools,
-      maxSteps: 6, // Permitir listar productos y/o crear pedidos
+      maxSteps: 8, // Suficiente para buscar cliente -> listar productos -> crear pedido -> responder
     });
 
-    // 5. Agregar respuesta del asistente al historial
     await conversationStore.addMessage(whatsapp, { role: 'assistant', content: result.text });
 
     return result.text;
   } catch (error) {
-    console.error('Error in public agent:', error);
+    console.error('Error en public agent:', error);
     return "¡Hola! 🍽️ Tuvimos un pequeño inconveniente técnico procesando tu consulta. Por favor, escribinos de nuevo en unos minutos.";
   }
 }
+

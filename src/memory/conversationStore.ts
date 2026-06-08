@@ -20,11 +20,15 @@ export const conversationStore = {
         return memoryFallback.get(whatsapp) || [];
       }
 
-      // 2. Traer los últimos N mensajes ordenados cronológicamente
+      // 2. Traer los últimos N mensajes ordenados cronológicamente (limitado a últimas 24 horas)
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
       const { data: messages, error } = await supabase
         .from('ChatMessage')
         .select('role, content')
         .eq('conversationId', conversation.id)
+        .gte('createdAt', twentyFourHoursAgo.toISOString())
         .order('createdAt', { ascending: true })
         .limit(MAX_MESSAGES);
 
