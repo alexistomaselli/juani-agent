@@ -1,9 +1,7 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
-import * as dotenv from 'dotenv';
 import { operatorWebhook } from './webhooks/operador.js';
 import { publicWebhook } from './webhooks/publico.js';
-
-dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
