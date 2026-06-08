@@ -56,13 +56,13 @@ async function getJuaniStatus() {
   if (isVacationMode && vacationMessage) {
     statusGreeting = vacationMessage;
   } else if (isSchoolTime) {
-    statusGreeting = "¡Hola! Soy Juani. 🏫 En este momento estoy en la escuela, pero dejame tu pedido anotado por acá y lo preparamos apenas salga. ¡Gracias! 🍕🍽️";
+    statusGreeting = "¡Hola! Soy Juani. 🏫 En este momento estoy en la escuela, pero dejame tu pedido anotado por acá y lo preparamos apenas salga.";
   } else {
     const isWeekend = day === 0 || day === 6;
     if (isWeekend) {
-      statusGreeting = "¡Hola! Soy Juani. 👨‍🍳 Hoy es fin de semana, así que estoy libre en la cocina preparando cosas ricas. ¿Qué te gustaría pedir? 🍕🍽️";
+      statusGreeting = "¡Hola! Soy Juani. 👨‍🍳 Hoy es fin de semana, así que estoy libre en la cocina preparando cosas ricas.";
     } else {
-      statusGreeting = "¡Hola! Soy Juani. 👋 Ya salí de la escuela y estoy acá en la cocina metiéndole con todo. ¿Querías hacer un pedido? 🍕🍽️";
+      statusGreeting = "¡Hola! Soy Juani. 👋 Ya salí de la escuela y estoy acá en la cocina metiéndole con todo.";
     }
   }
 
@@ -88,7 +88,13 @@ ESTADO ACTUAL DE LA TIENDA Y DE JUANI:
 - Fecha/Hora en Argentina: ${statusInfo.dateTimeStr}
 - Información de Reparto/Horarios: "${statusInfo.deliveryDaysInfo}" (Usá esta info si te preguntan cuándo reparten o entregan).
 - Mensaje de saludo sugerido: "${statusInfo.statusGreeting}"
-*Nota: Si el cliente recién te escribe por primera vez, saludalo integrando amablemente este mensaje de saludo.*
+
+*INSTRUCCIÓN CRÍTICA PARA EL PRIMER MENSAJE:*
+Si el cliente te escribe por primera vez (ej. dice "Hola"), DEBES:
+1. Usar el "Mensaje de saludo sugerido" tal cual.
+2. Usar la herramienta 'listar_productos' para ver qué hay activo.
+3. Terminar tu mensaje ofreciendo activamente uno de esos productos de forma súper tentadora para persuadirlo a comprar (ej: "¿Te tiento con un paquete de prepizzetas integrales riquísimas por $5000?"). 
+PROHIBIDO terminar el saludo inicial con frases genéricas y aburridas como "¿En qué puedo ayudarte hoy?". ¡Sos un vendedor entusiasta!
 
 ═══════════════════════════════════════
 MANUAL DE OPERACIONES PARA VENDER
