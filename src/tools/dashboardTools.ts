@@ -260,7 +260,7 @@ export const dashboardTools = {
   modificar_pedido: tool({
     description: 'Modifica un pedido existente (solo si su estado es PENDING). Permite cambiar cantidad, dirección o marcarlo como CANCELLED.',
     parameters: z.object({
-      orderId: z.union([z.string(), z.number()]).describe('UUID del pedido o el Número de Pedido (ej: 55)'),
+      orderId: z.string().describe('UUID del pedido o el Número de Pedido corto (ej: "55")'),
       quantity: z.number().optional().describe('Nueva cantidad de paquetes'),
       deliveryAddress: z.string().optional().describe('Nueva dirección de entrega'),
       status: z.enum(['PENDING', 'CANCELLED']).optional().describe('Para cancelar el pedido, envía CANCELLED'),
