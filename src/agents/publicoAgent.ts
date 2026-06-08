@@ -60,27 +60,53 @@ function getJuaniStatus() {
 
 /**
  * Extrae el estado del pedido en progreso escaneando el historial de la conversación.
- * Busca patrones en los mensajes del asistente para recuperar datos ya confirmados.
+ * Escanea tanto mensajes del usuario como del asistente con patrones flexibles.
  */
 type CoreMessage = { role: string; content: string | any[] };
+
+function extractText(content: string | any[]): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join(' ');
+  }
+  return '';
+}
 
 function extractPendingOrderState(history: CoreMessage[]): string {
   let quantity: number | null = null;
   let product: string | null = null;
 
   for (const msg of history) {
-    const content = typeof msg.content === 'string'
-      ? msg.content
-      : Array.isArray(msg.content)
-        ? msg.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join(' ')
-        : '';
+    const text = extractText(msg.content);
+
+    if (msg.role === 'user') {
+      // Captura cantidad desde el usuario: "2 paquetes", "quiero 3", "si 2", "mandame 4 paquetes"
+      const userQtyMatch = text.match(/\b(\d+)\s*paquetes?\b/i);
+      if (userQtyMatch) {
+        quantity = parseInt(userQtyMatch[1], 10);
+      }
+    }
 
     if (msg.role === 'assistant') {
-      // Detecta frases como "Te anoto 2 paquetes de Pizzetas (x12)"
-      const match = content.match(/[Tt]e anoto (\d+) paquetes? de ([^\n.!?]+?)(?:\s*[🍕🍽️👨‍🍳🥖]|\.|,|$)/u);
-      if (match) {
-        quantity = parseInt(match[1], 10);
-        product = match[2].trim();
+      // Captura cantidad + producto desde el asistente en cualquiera de sus formas:
+      // "Te anoto 2 paquetes de Pizzetas"
+      // "Anotado: 2 paquetes de Pizzetas"  
+      // "anotamos 3 paquetes de Pizzetas"
+      // "confirmados 2 paquetes de Pizzetas"
+      const assistantMatch = text.match(
+        /(?:[Tt]e anoto|[Aa]notado[:\s]+|[Aa]notamos|[Cc]onfirmados?)[:\s]+(\d+)\s*paquetes?\s*de\s*([^\n.!?🍕🍽️👨‍🍳🥖,]+)/u
+      );
+      if (assistantMatch) {
+        quantity = parseInt(assistantMatch[1], 10);
+        product = assistantMatch[2].trim();
+      }
+
+      // Si no capturó cantidad+producto juntos, al menos captura el producto cuando asistente lo menciona
+      if (!product) {
+        const productMatch = text.match(/paquetes?\s*de\s*([^\n.!?🍕🍽️👨‍🍳🥖,(]+)/u);
+        if (productMatch) {
+          product = productMatch[1].trim();
+        }
       }
     }
   }
