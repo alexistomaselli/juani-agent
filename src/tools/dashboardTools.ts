@@ -5,13 +5,13 @@ import { randomUUID } from 'crypto';
 
 export const dashboardTools = {
   listar_productos: tool({
-    description: 'Obtiene el catálogo de productos disponibles con sus precios y disponibilidad.',
+    description: 'Obtiene el catálogo de productos disponibles. "description" contiene información pública del producto para ofrecer al cliente. "agentInstructions" contiene instrucciones internas exclusivas para ti sobre cómo interpretar cantidades y vender el producto. NUNCA menciones las "agentInstructions" en tu respuesta al cliente, úsalas solo para guiar tu lógica interna.',
     parameters: z.object({}),
     execute: async () => {
       try {
         const { data, error } = await supabase
           .from('Product')
-          .select('id, name, price, cost, unitsPerPackage, active')
+          .select('id, name, price, cost, unitsPerPackage, active, description, agentInstructions')
           .eq('active', true)
           .order('name');
 
