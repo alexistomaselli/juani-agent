@@ -3,6 +3,15 @@ import { processPublicMessage } from '../agents/publicoAgent.js';
 import { evolutionApi } from '../lib/evolutionApi.js';
 import { EvolutionWebhookPayload } from '../types/evolution.js';
 
+// Deduplicación: evita procesar el mismo mensaje dos veces (Evolution API puede re-entregar webhooks)
+const processedMessages = new Set<string>();
+const MESSAGE_TTL_MS = 60_000; // 1 minuto de TTL para limpiar el Set
+
+function markMessageProcessed(messageId: string) {
+  processedMessages.add(messageId);
+  setTimeout(() => processedMessages.delete(messageId), MESSAGE_TTL_MS);
+}
+
 export const publicWebhook = async (req: Request, res: Response) => {
   const body = req.body as EvolutionWebhookPayload;
 
@@ -21,6 +30,14 @@ export const publicWebhook = async (req: Request, res: Response) => {
   if (isFromMe) {
     return res.status(200).send('Message from bot ignored');
   }
+
+  // Deduplicar por messageId para evitar doble procesamiento
+  const messageId = messageData.key.id;
+  if (messageId && processedMessages.has(messageId)) {
+    console.log(`⚠️ [PUBLICO] Mensaje duplicado ignorado: ${messageId}`);
+    return res.status(200).send('Duplicate message ignored');
+  }
+  if (messageId) markMessageProcessed(messageId);
 
   const text = messageData.message?.conversation || 
                messageData.message?.extendedTextMessage?.text || 
