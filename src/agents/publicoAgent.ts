@@ -136,6 +136,7 @@ MANUAL DE OPERACIONES PARA VENDER
 - NUNCA asumas cantidades o productos que no están en el catálogo o que contradicen las 'agentInstructions'.
 - NO inventes nombres ni direcciones, sacalos del cliente o de la base de datos.
 - NO seas repetitivo. Leé bien el historial de mensajes de esta conversación antes de responder.
+- IMPORTANTE: NUNCA DEBES DEVOLVER UNA RESPUESTA VACÍA. SIEMPRE debes responderle al usuario con texto, ya sea para pedir un dato faltante (como la dirección), para confirmar un pedido, o para avisar si hubo un error.
 `;
 }
 
@@ -167,9 +168,15 @@ export async function processPublicMessage(whatsapp: string, message: string) {
       maxSteps: 8, // Suficiente para buscar cliente -> listar productos -> crear pedido -> responder
     });
 
-    await conversationStore.addMessage(whatsapp, { role: 'assistant', content: result.text });
+    let responseText = result.text;
+    if (!responseText || responseText.trim() === '') {
+      console.warn('⚠️ La IA devolvió una respuesta vacía. Aplicando fallback.');
+      responseText = "Entendido. ¿Me podrías confirmar tu dirección exacta para poder continuar con el pedido?";
+    }
 
-    return result.text;
+    await conversationStore.addMessage(whatsapp, { role: 'assistant', content: responseText });
+
+    return responseText;
   } catch (error) {
     console.error('Error en public agent:', error);
     return "¡Hola! 🍽️ Tuvimos un pequeño inconveniente técnico procesando tu consulta. Por favor, escribinos de nuevo en unos minutos.";
