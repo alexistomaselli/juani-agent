@@ -75,6 +75,8 @@ function extractText(content: string | any[]): string {
 function extractPendingOrderState(history: CoreMessage[]): string {
   let quantity: number | null = null;
   let product: string | null = null;
+  let customerName: string | null = null;
+  let deliveryAddress: string | null = null;
 
   for (const msg of history) {
     const text = extractText(msg.content);
@@ -85,14 +87,21 @@ function extractPendingOrderState(history: CoreMessage[]): string {
       if (userQtyMatch) {
         quantity = parseInt(userQtyMatch[1], 10);
       }
+
+      // Captura nombre + dirección cuando el usuario los da juntos:
+      // "Mariela a Matheu 757" / "Mariela, calle Matheu 757" / "alexis en mathe 757"
+      const userNameAddrMatch = text.match(
+        /^([A-Za-záéíóúÁÉÍÓÚüÜñÑ]+)[,.\s]+(?:a\s+|en\s+|calle\s+|mi\s+direcci[oó]n\s+es\s+|para\s+)(.+)/i
+      );
+      if (userNameAddrMatch && userNameAddrMatch[1].length > 2) {
+        customerName = userNameAddrMatch[1].trim();
+        deliveryAddress = userNameAddrMatch[2].replace(/\s*y\s+si.*$/i, '').trim();
+      }
     }
 
     if (msg.role === 'assistant') {
       // Captura cantidad + producto desde el asistente en cualquiera de sus formas:
-      // "Te anoto 2 paquetes de Pizzetas"
-      // "Anotado: 2 paquetes de Pizzetas"  
-      // "anotamos 3 paquetes de Pizzetas"
-      // "confirmados 2 paquetes de Pizzetas"
+      // "Te anoto 2 paquetes de Pizzetas" / "Anotado: 2 paquetes de Pizzetas" / "anotamos 3..."
       const assistantMatch = text.match(
         /(?:[Tt]e anoto|[Aa]notado[:\s]+|[Aa]notamos|[Cc]onfirmados?)[:\s]+(\d+)\s*paquetes?\s*de\s*([^\n.!?🍕🍽️👨‍🍳🥖,]+)/u
       );
@@ -101,12 +110,24 @@ function extractPendingOrderState(history: CoreMessage[]): string {
         product = assistantMatch[2].trim();
       }
 
-      // Si no capturó cantidad+producto juntos, al menos captura el producto cuando asistente lo menciona
+      // Si no capturó cantidad+producto juntos, al menos captura el producto
       if (!product) {
         const productMatch = text.match(/paquetes?\s*de\s*([^\n.!?🍕🍽️👨‍🍳🥖,(]+)/u);
         if (productMatch) {
           product = productMatch[1].trim();
         }
+      }
+
+      // Captura nombre y dirección cuando el asistente los resume en su mensaje:
+      // "¿sería 1 paquete para Mariela en Matheu 757?"
+      // "para Mariela a Matheu 757"
+      // "para Mariela, Matheu 757"
+      const summaryMatch = text.match(
+        /para\s+([A-Za-záéíóúÁÉÍÓÚüÜñÑ]+)\s+(?:en|a|,)\s+([^\n?!.(]+)/i
+      );
+      if (summaryMatch && summaryMatch[1].length > 2) {
+        customerName = summaryMatch[1].trim();
+        deliveryAddress = summaryMatch[2].trim();
       }
     }
   }
@@ -119,9 +140,18 @@ function extractPendingOrderState(history: CoreMessage[]): string {
   lines.push('═══════════════════════════════════════');
   if (quantity) lines.push(`✓ Cantidad ya confirmada: ${quantity} paquetes`);
   if (product) lines.push(`✓ Producto ya confirmado: ${product}`);
+  if (customerName) lines.push(`✓ Nombre ya confirmado: ${customerName}`);
+  if (deliveryAddress) lines.push(`✓ Dirección ya confirmada: ${deliveryAddress}`);
   lines.push('');
-  lines.push('⚠️ CRÍTICO: NO volvás a preguntar por los datos marcados con ✓. Ya fueron acordados.');
-  lines.push('Si con el mensaje actual del cliente completás los 3 datos (producto+cantidad, nombre, dirección) → llamá a crear_pedido YA.');
+
+  const allConfirmed = quantity && product && customerName && deliveryAddress;
+  if (allConfirmed) {
+    lines.push('🚨 TENÉS LOS 4 DATOS COMPLETOS. Llamá a crear_pedido AHORA MISMO.');
+    lines.push('Si el cliente acaba de responder "si", "sisi", "dale", "ok" o similar → eso es confirmación. CREAR EL PEDIDO YA.');
+  } else {
+    lines.push('⚠️ CRÍTICO: NO volvás a preguntar por los datos marcados con ✓. Ya fueron acordados.');
+    lines.push('Si con el mensaje actual del cliente completás los 4 datos → llamá a crear_pedido YA.');
+  }
   lines.push('═══════════════════════════════════════');
   return '\n' + lines.join('\n') + '\n';
 }
