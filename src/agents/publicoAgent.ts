@@ -2,6 +2,7 @@ import { google } from '@ai-sdk/google';
 import { generateText } from 'ai';
 import { dashboardTools } from '../tools/dashboardTools.js';
 import { conversationStore } from '../memory/conversationStore.js';
+import { supabase } from '../lib/supabase.js';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -18,7 +19,7 @@ const JUANI_SCHEDULE = {
   }
 };
 
-function getJuaniStatus() {
+async function getJuaniStatus() {
   const now = new Date();
   const argDateStr = now.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' });
   const argDate = new Date(argDateStr);
@@ -34,8 +35,27 @@ function getJuaniStatus() {
     (hour === JUANI_SCHEDULE.school.endHour && minute <= JUANI_SCHEDULE.school.endMinute)
   );
 
+  // Fetch store settings from DB
+  let isVacationMode = false;
+  let vacationMessage = "";
+  let deliveryDaysInfo = "";
+
+  try {
+    const { data } = await supabase.from('StoreSettings').select('*').limit(1).single();
+    if (data) {
+      isVacationMode = data.isVacationMode;
+      vacationMessage = data.vacationMessage;
+      deliveryDaysInfo = data.deliveryDaysInfo;
+    }
+  } catch (err) {
+    console.error('Error fetching StoreSettings:', err);
+  }
+
   let statusGreeting = "";
-  if (isSchoolTime) {
+  
+  if (isVacationMode && vacationMessage) {
+    statusGreeting = vacationMessage;
+  } else if (isSchoolTime) {
     statusGreeting = "¡Hola! Soy Juani. 🏫 En este momento estoy en la escuela, pero dejame tu pedido anotado por acá y lo preparamos apenas salga. ¡Gracias! 🍕🍽️";
   } else {
     const isWeekend = day === 0 || day === 6;
@@ -48,12 +68,14 @@ function getJuaniStatus() {
 
   return {
     isSchoolTime,
+    isVacationMode,
     statusGreeting,
+    deliveryDaysInfo,
     dateTimeStr: argDate.toLocaleString('es-AR')
   };
 }
 
-function getSystemPrompt(whatsappNumber: string, statusInfo: ReturnType<typeof getJuaniStatus>) {
+function getSystemPrompt(whatsappNumber: string, statusInfo: Awaited<ReturnType<typeof getJuaniStatus>>) {
   return `Eres "Juani", el asistente virtual y la voz de "Juani Cocina". 
 Juani es un adolescente de 16 años con retraso madurativo que no habla de forma oral, por lo que este bot de WhatsApp es su herramienta principal para expresarse, vender de forma independiente y comunicarse con sus clientes.
 
@@ -62,10 +84,11 @@ Tu personalidad:
 - Expresate en español rioplatense/argentino coloquial ("voseo": usá querés, decime, anotás, che).
 - Usá emojis amigables de cocina y comida (🍕, 🍽️, 👨‍🍳, 🏠) de forma natural.
 
-ESTADO ACTUAL DE JUANI:
+ESTADO ACTUAL DE LA TIENDA Y DE JUANI:
 - Fecha/Hora en Argentina: ${statusInfo.dateTimeStr}
+- Información de Reparto/Horarios: "${statusInfo.deliveryDaysInfo}" (Usá esta info si te preguntan cuándo reparten o entregan).
 - Mensaje de saludo sugerido: "${statusInfo.statusGreeting}"
-*Nota: Si el cliente recién te escribe por primera vez, saludalo integrando amablemente esta situación.*
+*Nota: Si el cliente recién te escribe por primera vez, saludalo integrando amablemente este mensaje de saludo.*
 
 ═══════════════════════════════════════
 MANUAL DE OPERACIONES PARA VENDER
@@ -107,7 +130,8 @@ export async function processPublicMessage(whatsapp: string, message: string) {
     return "¡Hola! Gracias por comunicarte con Juani Cocina. 🍽️ Actualmente nuestro asistente automático está descansando, pero dejanos tu mensaje y te responderemos a la brevedad. ¡Gracias!";
   }
 
-  const statusInfo = getJuaniStatus();
+  // 1. Obtener estado en tiempo real de Juani
+  const statusInfo = await getJuaniStatus();
   console.log(`⏰ [PUBLICO] Estado: ${statusInfo.dateTimeStr} - Escuela: ${statusInfo.isSchoolTime}`);
 
   // El history ya viene limitado a las últimas 24 horas desde conversationStore
