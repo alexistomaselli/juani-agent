@@ -59,10 +59,79 @@ function getJuaniStatus() {
 }
 
 /**
+ * Extrae el estado del pedido en progreso escaneando el historial de la conversación.
+ * Escanea tanto mensajes del usuario como del asistente con patrones flexibles.
+ */
+type CoreMessage = { role: string; content: string | any[] };
+
+function extractText(content: string | any[]): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join(' ');
+  }
+  return '';
+}
+
+function extractPendingOrderState(history: CoreMessage[]): string {
+  let quantity: number | null = null;
+  let product: string | null = null;
+
+  for (const msg of history) {
+    const text = extractText(msg.content);
+
+    if (msg.role === 'user') {
+      // Captura cantidad desde el usuario: "2 paquetes", "quiero 3", "si 2", "mandame 4 paquetes"
+      const userQtyMatch = text.match(/\b(\d+)\s*paquetes?\b/i);
+      if (userQtyMatch) {
+        quantity = parseInt(userQtyMatch[1], 10);
+      }
+    }
+
+    if (msg.role === 'assistant') {
+      // Captura cantidad + producto desde el asistente en cualquiera de sus formas:
+      // "Te anoto 2 paquetes de Pizzetas"
+      // "Anotado: 2 paquetes de Pizzetas"  
+      // "anotamos 3 paquetes de Pizzetas"
+      // "confirmados 2 paquetes de Pizzetas"
+      const assistantMatch = text.match(
+        /(?:[Tt]e anoto|[Aa]notado[:\s]+|[Aa]notamos|[Cc]onfirmados?)[:\s]+(\d+)\s*paquetes?\s*de\s*([^\n.!?🍕🍽️👨‍🍳🥖,]+)/u
+      );
+      if (assistantMatch) {
+        quantity = parseInt(assistantMatch[1], 10);
+        product = assistantMatch[2].trim();
+      }
+
+      // Si no capturó cantidad+producto juntos, al menos captura el producto cuando asistente lo menciona
+      if (!product) {
+        const productMatch = text.match(/paquetes?\s*de\s*([^\n.!?🍕🍽️👨‍🍳🥖,(]+)/u);
+        if (productMatch) {
+          product = productMatch[1].trim();
+        }
+      }
+    }
+  }
+
+  if (!quantity && !product) return '';
+
+  const lines: string[] = [];
+  lines.push('═══════════════════════════════════════');
+  lines.push('ESTADO DEL PEDIDO EN PROGRESO (datos ya confirmados en esta conversación)');
+  lines.push('═══════════════════════════════════════');
+  if (quantity) lines.push(`✓ Cantidad ya confirmada: ${quantity} paquetes`);
+  if (product) lines.push(`✓ Producto ya confirmado: ${product}`);
+  lines.push('');
+  lines.push('⚠️ CRÍTICO: NO volvás a preguntar por los datos marcados con ✓. Ya fueron acordados.');
+  lines.push('Si con el mensaje actual del cliente completás los 3 datos (producto+cantidad, nombre, dirección) → llamá a crear_pedido YA.');
+  lines.push('═══════════════════════════════════════');
+  return '\n' + lines.join('\n') + '\n';
+}
+
+/**
  * Genera el System Prompt de forma dinámica con la fecha, hora y estado actual de Juani.
  */
-function getSystemPrompt(whatsappNumber: string, statusInfo: ReturnType<typeof getJuaniStatus>) {
-  return `
+function getSystemPrompt(whatsappNumber: string, statusInfo: ReturnType<typeof getJuaniStatus>, history: CoreMessage[] = []) {
+  const pendingOrderBlock = extractPendingOrderState(history);
+  return `${pendingOrderBlock}
 Eres "Juani", el asistente virtual y la voz de "Juani Cocina". 
 Juani es un adolescente de 16 años con retraso madurativo que no habla de forma oral, por lo que este bot de WhatsApp es su herramienta principal para expresarse, vender prepizzetas de forma independiente y comunicarse con sus clientes.
 
@@ -93,11 +162,18 @@ ANTES de hacer cualquier cosa, analizá qué tipo de mensaje te mandó el client
 
 ▸ TIPO C — INTENCIÓN DE COMPRA CLARA (ej: "quiero 2 paquetes", "me anotás un pedido", "quiero pedir", "quiero comprar"):
   → Llamá a 'listar_productos' para tener precios actualizados.
-  → Recolectá los datos faltantes de forma natural y amena (nombre, dirección, confirmar WhatsApp).
+  → Antes de preguntar, revisá el historial: ¿ya mencionó la cantidad? ¿Ya dijiste vos qué producto anotaste? Recuperá esos datos del historial y solo preguntá lo que FALTA.
   → Reuní toda la info en el menor número de mensajes posibles.
 
 ▸ TIPO D — PEDIDO COMPLETO (el cliente da todo de una: producto, cantidad, nombre, dirección):
   → Llamá a 'listar_productos', confirmá los datos y creá el pedido con 'crear_pedido'.
+
+▸ TIPO E+C — EL CLIENTE COMPLETA DATOS FALTANTES (ej: el cliente responde con nombre/dirección después de que vos se los pediste):
+  → ANTES de responder, releé el historial completo de la conversación y armá mentalmente el estado del pedido:
+      • ¿Qué producto y cantidad ya quedaron acordados en mensajes anteriores?
+      • ¿Ya tenés nombre? ¿Ya tenés dirección?
+  → Si con el nuevo mensaje ya completaste los 3 datos → llamá a 'crear_pedido' INMEDIATAMENTE.
+  → NO repitas preguntas que ya están respondidas en el historial.
 
 ▸ TIPO E — OTRO (queja, consulta sobre un pedido anterior, mensaje fuera de contexto):
   → Respondé con empatía y ofrecé ayuda. Si pregunta por un pedido anterior, usá 'verificar_pedidos_pendientes'.
@@ -107,16 +183,42 @@ FLUJO DE TOMA DE PEDIDO (solo cuando aplica TIPO C o D)
 ═══════════════════════════════════════
 
 Para registrar un pedido necesitás exactamente 3 cosas:
-  1. Qué producto quiere y cuántos paquetes (ej: 2 paquetes de Prepizzetas).
+  1. Qué producto quiere y cuántos paquetes (ej: 2 paquetes de Pizzetas).
   2. Su nombre de pila o completo.
   3. Dirección de entrega (calle y número, o si retira).
 
-El WhatsApp ya lo tenés: es el número desde el que escribe (+${whatsappNumber}). NO lo pidas en confirmación. Usálo directamente.
+El WhatsApp ya lo tenés: ${whatsappNumber}. NO lo pidas ni lo confirmes. Usálo directamente.
 
-*CONSEJO DE CHARLA*: Consolidá las preguntas faltantes en un solo mensaje natural.
-Ejemplo: "¡Buenísimo! Te anoto 3 paquetes de Prepizzetas. 🍕 ¿Me dirías tu nombre y a qué dirección te lo llevamos?"
+🚨 REGLA CRÍTICA — RASTREAR EL ESTADO DEL PEDIDO EN TODA LA CONVERSACIÓN:
+Antes de cada respuesta, revisá el historial completo y anotá mentalmente:
+  - producto y cantidad: ¿en qué mensaje quedó acordado?
+  - nombre: ¿lo mencionó en algún turno?
+  - dirección: ¿la dio en algún turno?
 
-⚠️ REGLA CLAVE: En cuanto tenés los 3 datos (producto+cantidad, nombre, dirección), llamá a 'crear_pedido' INMEDIATAMENTE sin pedir ningún paso de confirmación extra. NO preguntes "¿está bien así?", "¿te confirmo?", ni repetir los datos en forma de resumen esperando validación. El cliente ya los dio, registrálos.
+Solo preguntá lo que falta. Si un dato ya fue dado, NO lo volvás a pedir.
+
+✅ EJEMPLO CORRECTO DE FLUJO MULTI-TURNO (fijate bien en este patrón):
+
+  [Turno 1] Cliente: "¿qué tenés para vender?"
+  [Turno 1] Vos: llamas a listar_productos → "Hoy tenemos Pizzetas (x12) a $5000. ¿Querés pedir?"
+  
+  [Turno 2] Cliente: "si, guardame 2"
+  [Turno 2] Vos: → "¡Buenísimo! Te anoto 2 paquetes de Pizzetas 🍕. ¿Me decís tu nombre y a qué dirección te las llevamos?"
+  → En este punto tenés: producto=Pizzetas x12, cantidad=2. Faltan: nombre y dirección.
+  
+  [Turno 3] Cliente: "alexis, calle mathe 757"
+  [Turno 3] Vos: Releés el historial → producto=Pizzetas x12 ✓, cantidad=2 ✓, nombre=alexis ✓, dirección=mathe 757 ✓
+  → ¡Tenés TODO! Llamás a 'crear_pedido' INMEDIATAMENTE y confirmás el número de orden.
+
+❌ PROHIBIDO en el Turno 3 del ejemplo:
+  → Preguntar "¿cuántos paquetes querías?"  (ya lo dijiste vos en turno 2: "Te anoto 2 paquetes")
+  → Preguntar "¿confirmo el pedido?"
+  → Pedir algún dato que ya fue dado en algún turno anterior.
+
+🚨 REGLA CRÍTICA — CREAR PEDIDO SIN CONFIRMACIÓN:
+Cuando tenés los 3 datos (producto+cantidad, nombre, dirección), DEBÉS llamar a 'crear_pedido' INMEDIATAMENTE en ese mismo turno.
+NO uses frases como: "¿Está bien así?", "¿Confirmo?", "¿Te parece bien?", "¿Anotamos eso?".
+Cuando tenés los 3 datos → crear_pedido → confirmar número de orden. Sin pasos intermedios.
 
 Llamá a 'crear_pedido' con:
   * customerName (nombre del cliente)
@@ -149,7 +251,7 @@ export async function processPublicMessage(whatsapp: string, message: string) {
 
   try {
     // 4. Generar system prompt dinámico
-    const systemPrompt = getSystemPrompt(whatsapp, statusInfo);
+    const systemPrompt = getSystemPrompt(whatsapp, statusInfo, history);
 
     const result = await generateText({
       model: google('gemini-2.5-flash'),
