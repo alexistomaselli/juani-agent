@@ -260,19 +260,25 @@ export const dashboardTools = {
   modificar_pedido: tool({
     description: 'Modifica un pedido existente (solo si su estado es PENDING). Permite cambiar cantidad, dirección o marcarlo como CANCELLED.',
     parameters: z.object({
-      orderId: z.string().describe('ID único del pedido (UUID) a modificar'),
+      orderId: z.union([z.string(), z.number()]).describe('UUID del pedido o el Número de Pedido (ej: 55)'),
       quantity: z.number().optional().describe('Nueva cantidad de paquetes'),
       deliveryAddress: z.string().optional().describe('Nueva dirección de entrega'),
       status: z.enum(['PENDING', 'CANCELLED']).optional().describe('Para cancelar el pedido, envía CANCELLED'),
     }),
     execute: async (params) => {
       try {
-        // Primero, obtener el pedido actual para recalcular totalAmount si cambia la cantidad
-        const { data: order, error: orderErr } = await supabase
-          .from('Order')
-          .select('id, unitPrice, status')
-          .eq('id', params.orderId)
-          .maybeSingle();
+        // Buscar el pedido por UUID o por orderNumber
+        let query = supabase.from('Order').select('id, unitPrice, status');
+        
+        const parsedNumber = parseInt(String(params.orderId), 10);
+        // Si el parámetro es puramente numérico (ej: "55" o 55), buscar por orderNumber
+        if (!isNaN(parsedNumber) && String(parsedNumber) === String(params.orderId)) {
+          query = query.eq('orderNumber', parsedNumber);
+        } else {
+          query = query.eq('id', params.orderId);
+        }
+
+        const { data: order, error: orderErr } = await query.maybeSingle();
           
         if (orderErr || !order) return { success: false, error: 'Pedido no encontrado.' };
         if (order.status !== 'PENDING' && params.status !== 'CANCELLED') {
@@ -290,7 +296,7 @@ export const dashboardTools = {
         const { data: updatedOrder, error: updateErr } = await supabase
           .from('Order')
           .update(updates)
-          .eq('id', params.orderId)
+          .eq('id', order.id)
           .select('id, orderNumber, product, quantity, totalAmount, status, deliveryAddress')
           .single();
 
