@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
+import cors from 'cors';
 import { operatorWebhook } from './webhooks/operador.js';
 import { publicWebhook } from './webhooks/publico.js';
 import { getModoHandler, setModoHandler } from './webhooks/modo.js';
@@ -7,6 +8,25 @@ import { evolutionApi } from './lib/evolutionApi.js';
 
 const app = express();
 const port = process.env.PORT || 3001;
+
+// CORS: permite que el dashboard llame al agente desde el browser
+const allowedOrigins = [
+  'https://juanicocina.dydlabs.com',
+  'http://localhost:3000',
+  'http://localhost:3001',
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    // Permitir requests sin origin (ej: curl, Postman) y los origins permitidos
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: origin no permitido: ${origin}`));
+    }
+  },
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'x-operator-secret'],
+}));
 
 app.use(express.json());
 
