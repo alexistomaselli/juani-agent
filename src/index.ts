@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import { operatorWebhook } from './webhooks/operador.js';
 import { publicWebhook } from './webhooks/publico.js';
+import { getModoHandler, setModoHandler } from './webhooks/modo.js';
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -25,6 +26,10 @@ app.get('/health', (req: Request, res: Response) => {
 // Webhooks
 app.post('/webhook/operador', operatorWebhook);
 app.post('/webhook/publico', publicWebhook);
+
+// Operador: gestión manual de modos de chat
+app.get('/modo/:whatsapp', getModoHandler);
+app.post('/modo/:whatsapp', setModoHandler);
 
 app.listen(port, () => {
   console.log(`🚀 Juani Agent running on http://localhost:${port}`);
