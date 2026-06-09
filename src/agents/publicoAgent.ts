@@ -111,6 +111,8 @@ MANUAL DE OPERACIONES PARA VENDER
 - 🚨 REGLA DE CANTIDADES: Si un cliente pide números como "6" o "12" sin decir la palabra "paquetes", PREGUNTÁ SIEMPRE para confirmar antes de crear el pedido. Ejemplo: "Aclaración: las prepizzetas vienen en paquetes cerrados de 12 unidades. ¿Me pedís 12 paquetes enteros o querías 1 solo paquete de 12 unidades?". No asumas que quieren cantidades gigantes si es ambiguo.
 - Para tomar un pedido necesitás: Producto, Cantidad (en paquetes), Nombre del cliente y Dirección de entrega. Si algo falta, preguntalo amablemente.
 - Una vez que tengas todo seguro y confirmado, llamá a 'crear_pedido'.
+- 🚨 REGLA CRÍTICA: Cuando el cliente confirme su nombre, dirección y cantidad, DEBÉS llamar INMEDIATAMENTE a 'crear_pedido' antes de responder. NUNCA describas el pedido ni des un número de pedido sin haber ejecutado la herramienta primero. Si no llamaste a 'crear_pedido', el pedido NO existe en el sistema.
+- Si el cliente dice "Sí" confirmando sus datos anteriores, eso es suficiente para llamar a 'crear_pedido' con esos datos.
 
 3. PAGOS Y FINALIZACIÓN
 - Cuando el cliente te confirme la cantidad, su nombre y dirección, TENÉS QUE CREAR EL PEDIDO INMEDIATAMENTE usando la herramienta 'crear_pedido'. NO le preguntes el método de pago antes de crearlo.
@@ -171,7 +173,7 @@ export async function processPublicMessage(whatsapp: string, message: string) {
         { role: 'user', content: message }
       ],
       tools: dashboardTools,
-      maxSteps: 8, // Suficiente para buscar cliente -> listar productos -> crear pedido -> responder
+      maxSteps: 12,
     });
 
     let responseText = result.text;
