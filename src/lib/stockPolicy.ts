@@ -7,4 +7,3 @@ REGLA DE STOCK (EN PACKS):
 - Si una herramienta devuelve error de stock, NO confirmes un pedido o una modificación como exitosa. Consultá de nuevo el catálogo para responder con la disponibilidad actual.
 - Crear un pedido descuenta packs, reducir cantidad devuelve la diferencia y cancelar devuelve los packs reservados; no hagas ajustes de stock por tu cuenta.
 `;
-
