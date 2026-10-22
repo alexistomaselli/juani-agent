@@ -11,7 +11,7 @@ export const dashboardTools = {
       try {
         const { data, error } = await supabase
           .from('Product')
-          .select('id, name, price, cost, unitsPerPackage, active, description, agentInstructions')
+          .select('id, name, price, cost, unitsPerPackage, active, stock, description, agentInstructions')
           .eq('active', true)
           .order('name');
 
@@ -31,13 +31,48 @@ export const dashboardTools = {
       whatsapp: z.string().optional().describe('Número de WhatsApp del cliente (sin prefijo)'),
       product: z.string().describe('Nombre exacto del producto del catálogo'),
       productId: z.string().describe('ID del producto del catálogo'),
-      quantity: z.number().describe('Cantidad de paquetes pedidos'),
+      quantity: z.number().int().positive().describe('Cantidad de paquetes pedidos'),
       isPaid: z.boolean().optional().describe('true si el cliente ya pagó, false si está pendiente de cobro'),
       deliveryAddress: z.string().optional().describe('Dirección de entrega del pedido (calle, número, etc.)'),
     }),
     execute: async (params) => {
       try {
-        // 1. Buscar o crear el cliente
+        // 1. Validar producto, precio y disponibilidad antes de escribir
+        console.log('Buscando producto:', params.product, 'ID:', params.productId);
+        let { data: product, error: prodErr } = await supabase
+          .from('Product')
+          .select('id, price, cost, unitsPerPackage, name, active, stock')
+          .eq('id', params.productId)
+          .maybeSingle();
+
+        // Si no encontró por ID, intentamos por nombre (fuzzy match simple)
+        if (!product) {
+          console.log('Producto no encontrado por ID, intentando por nombre...');
+          const { data: searchResult } = await supabase
+            .from('Product')
+            .select('id, price, cost, unitsPerPackage, name, active, stock')
+            .ilike('name', `%${params.product.split(' ')[0]}%`)
+            .eq('active', true)
+            .limit(1)
+            .maybeSingle();
+
+          product = searchResult;
+        }
+
+        if (prodErr || !product) {
+          console.error('Producto no encontrado:', params.product);
+          return { success: false, error: `El producto "${params.product}" no fue encontrado en el catálogo. Por favor, verificá el nombre.` };
+        }
+
+        if (!product.active) return { success: false, error: 'Este producto no está disponible actualmente.' };
+        if (product.stock !== null && product.stock !== undefined && product.stock < params.quantity) {
+          return { success: false, error: product.stock === 0
+            ? 'Actualmente nos quedamos sin stock de este producto, pero en estos días lo vamos a estar renovando y vamos a avisar por Instagram.'
+            : `Actualmente quedan ${product.stock} packs de este producto. Preguntá si quiere ajustar la cantidad.`, code: 'INSUFFICIENT_STOCK' };
+        }
+        const totalAmount = product.price * params.quantity;
+
+        // 2. Buscar o crear el cliente
         console.log('Creando pedido para:', params.customerName, 'WhatsApp:', params.whatsapp, 'Dirección:', params.deliveryAddress);
         let customerId: string | null = null;
 
@@ -97,35 +132,6 @@ export const dashboardTools = {
           customerId = newCustomer!.id;
         }
 
-        // 2. Obtener precio del producto (mejorado: busca por ID o por nombre)
-        console.log('Buscando producto:', params.product, 'ID:', params.productId);
-        let { data: product, error: prodErr } = await supabase
-          .from('Product')
-          .select('id, price, cost, unitsPerPackage, name')
-          .eq('id', params.productId)
-          .maybeSingle();
-
-        // Si no encontró por ID, intentamos por nombre (fuzzy match simple)
-        if (!product) {
-          console.log('Producto no encontrado por ID, intentando por nombre...');
-          const { data: searchResult } = await supabase
-            .from('Product')
-            .select('id, price, cost, unitsPerPackage, name')
-            .ilike('name', `%${params.product.split(' ')[0]}%`)
-            .eq('active', true)
-            .limit(1)
-            .maybeSingle();
-          
-          product = searchResult;
-        }
-
-        if (prodErr || !product) {
-          console.error('Producto no encontrado:', params.product);
-          return { success: false, error: `El producto "${params.product}" no fue encontrado en el catálogo. Por favor, verificá el nombre.` };
-        }
-
-        const totalAmount = product.price * params.quantity;
-
         // 3. Obtener el siguiente orderNumber
         const { data: maxOrder } = await supabase
           .from('Order')
@@ -175,6 +181,9 @@ export const dashboardTools = {
           message: `✅ Pedido #${order!.orderNumber} registrado: ${order!.quantity}x ${order!.product} ($${order!.totalAmount?.toLocaleString()}) para ${params.customerName}.${order!.isPaid ? ' 💰 Marcado como pagado.' : ' ⏳ Pendiente de cobro.'}`,
         };
       } catch (error: any) {
+        if (error.message === 'JUANI_STOCK_INSUFFICIENT') {
+          return { success: false, code: 'INSUFFICIENT_STOCK', error: 'El stock cambió mientras registrábamos el pedido y ya no alcanza para esa cantidad. Volvé a consultar el catálogo; si está en cero, avisá que actualmente nos quedamos sin stock, en estos días lo vamos a estar renovando y vamos a avisar por Instagram.' };
+        }
         console.error('Error en crear_pedido:', error);
         return {
           success: false,
@@ -261,14 +270,14 @@ export const dashboardTools = {
     description: 'Modifica un pedido existente (solo si su estado es PENDING). Permite cambiar cantidad, dirección o marcarlo como CANCELLED.',
     parameters: z.object({
       orderId: z.string().describe('UUID del pedido o el Número de Pedido corto (ej: "55")'),
-      quantity: z.number().optional().describe('Nueva cantidad de paquetes'),
+      quantity: z.number().int().positive().optional().describe('Nueva cantidad de paquetes'),
       deliveryAddress: z.string().optional().describe('Nueva dirección de entrega'),
       status: z.enum(['PENDING', 'CANCELLED']).optional().describe('Para cancelar el pedido, envía CANCELLED'),
     }),
     execute: async (params) => {
       try {
         // Buscar el pedido por UUID o por orderNumber
-        let query = supabase.from('Order').select('id, unitPrice, status');
+        let query = supabase.from('Order').select('id, quantity, unitPrice, status');
         
         const parsedNumber = parseInt(String(params.orderId), 10);
         // Si el parámetro es puramente numérico (ej: "55" o 55), buscar por orderNumber
@@ -286,7 +295,13 @@ export const dashboardTools = {
         }
 
         const updates: any = { updatedAt: new Date().toISOString() };
-        if (params.quantity !== undefined) {
+        if (params.quantity !== undefined && (!Number.isInteger(params.quantity) || params.quantity < 1)) {
+          return { success: false, error: 'La cantidad debe ser un número entero mayor que cero.' };
+        }
+        if (params.quantity !== undefined && params.quantity !== order.quantity) {
+          if (typeof order.unitPrice !== 'number' || !Number.isFinite(order.unitPrice) || order.unitPrice < 0) {
+            return { success: false, error: 'Este pedido no tiene precio por pack registrado. No se puede cambiar la cantidad sin verificar el precio original; no se usará el precio actual del catálogo.' };
+          }
           updates.quantity = params.quantity;
           updates.totalAmount = params.quantity * order.unitPrice;
         }
@@ -300,6 +315,7 @@ export const dashboardTools = {
           .select('id, orderNumber, product, quantity, totalAmount, status, deliveryAddress')
           .single();
 
+        if (updateErr?.message === 'JUANI_STOCK_INSUFFICIENT') return { success: false, code: 'INSUFFICIENT_STOCK', error: 'No hay stock suficiente para aumentar la cantidad. Consultá el catálogo actualizado. Si está en cero, avisá que actualmente nos quedamos sin stock, en estos días lo vamos a estar renovando y vamos a avisar por Instagram.' };
         if (updateErr) throw updateErr;
 
         return {

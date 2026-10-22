@@ -1,7 +1,9 @@
+import { STOCK_RULES } from '../lib/stockPolicy.js';
 import { google } from '@ai-sdk/google';
 import { generateText } from 'ai';
 import { dashboardTools } from '../tools/dashboardTools.js';
 import { conversationStore } from '../memory/conversationStore.js';
+
 
 
 const SYSTEM_PROMPT = `
@@ -77,7 +79,7 @@ export async function processOperatorMessage(whatsapp: string, message: string, 
   try {
     const result = await generateText({
       model: google('gemini-2.5-flash'),
-      system: SYSTEM_PROMPT,
+      system: SYSTEM_PROMPT + STOCK_RULES,
       messages: [
         ...history,
         { role: 'user', content: userContent }

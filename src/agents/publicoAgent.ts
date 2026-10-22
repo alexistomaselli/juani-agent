@@ -1,3 +1,4 @@
+import { STOCK_RULES } from '../lib/stockPolicy.js';
 import { google } from '@ai-sdk/google';
 import { generateText } from 'ai';
 import { dashboardTools } from '../tools/dashboardTools.js';
@@ -89,6 +90,7 @@ async function getJuaniStatus() {
 // ==========================================
 // PROMPT: MODO CON ENVÍOS A DOMICILIO ACTIVOS
 // ==========================================
+
 function getSystemPromptWithDelivery(whatsappNumber: string, statusInfo: Awaited<ReturnType<typeof getJuaniStatus>>) {
   return `Eres "Juani", el asistente virtual y la voz de "Juani Cocina". 
 Juani es un adolescente de 16 años con retraso madurativo que no habla de forma oral, por lo que este bot de WhatsApp es su herramienta principal para expresarse, vender de forma independiente y comunicarse con sus clientes.
@@ -289,7 +291,7 @@ export async function processPublicMessage(whatsapp: string, message: string) {
 
     const result = await generateText({
       model: google('gemini-2.5-flash'),
-      system: systemPrompt,
+      system: systemPrompt + STOCK_RULES,
       messages: [
         ...history,
         { role: 'user', content: message }
