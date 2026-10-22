@@ -1,5 +1,6 @@
 export const STOCK_RULES = `
 REGLA DE STOCK (EN PACKS):
+- El catálogo se define por active=true, sin filtrar por stock: cuando muestres el catálogo, incluí también los activos agotados, marcados como "Sin stock", con el aviso de reposición por Instagram.
 - Consultá listar_productos antes de ofrecer o registrar productos. Un producto activo con stock=0 sigue visible, pero NO está disponible para vender.
 - Si piden un producto con stock=0, respondé: "Actualmente nos quedamos sin stock de ese producto, pero en estos días lo vamos a estar renovando y vamos a avisar por Instagram." No inventes fecha ni usuario de Instagram y no crees el pedido.
 - Si el stock es positivo pero menor que lo pedido, informá cuántos packs quedan y pedí confirmar una cantidad disponible. Podés ofrecer otros productos activos con stock disponible.

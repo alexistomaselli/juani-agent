@@ -93,9 +93,9 @@ async function getJuaniStatus() {
 
 const CATALOG_GREETING_RULES = `
 - En este turno, llamá SIEMPRE a 'listar_productos', aunque ya haya conversación o un catálogo en el historial. No reutilices precios ni disponibilidad de mensajes anteriores.
-- Después del saludo, mostrá TODOS los productos activos con stock mayor que cero, uno por renglón. No elijas uno por el cliente ni omitas alternativas disponibles.
+- Después del saludo, mostrá TODOS los productos activos, uno por renglón, incluso si tienen stock cero. No elijas uno por el cliente ni ocultes productos activos por estar agotados.
 - En cada renglón usá el nombre exacto del catálogo, unitsPerPackage como unidades por pack y price como precio del pack. No inventes nombres, cantidades, precios ni características.
-- No ofrezcas como disponibles productos inactivos o con stock cero. Si todos los activos tienen stock cero, explicá que actualmente nos quedamos sin stock, en estos días lo vamos a estar renovando y vamos a avisar por Instagram.
+- Marcá cada activo con stock cero como "Sin stock" y aclarale al cliente que en estos días lo vamos a estar renovando y vamos a avisar por Instagram. Si sólo algunos están agotados, distinguí cuáles y ofrecé tomar pedido de los que sí tienen stock. Si todos están agotados, mostrá igualmente el catálogo activo y el aviso de reposición, sin ofrecer tomar pedidos. Nunca incluyas productos inactivos.
 - Si un activo tiene stock=null, aclaralo por separado como disponibilidad por confirmar; no afirmes que está disponible ni que se agotó. Si no hay productos activos, informá que por ahora no hay productos disponibles.
 - Si hay opciones disponibles, cerrá preguntando cuál le gustaría pedir. No crees un pedido por un simple saludo.
 `;
