@@ -1,3 +1,4 @@
+import { PROMOTION_RULES, appendPromotionStatus } from '../lib/promotionPolicy.js';
 import { STOCK_RULES } from '../lib/stockPolicy.js';
 import { google } from '@ai-sdk/google';
 import { generateText } from 'ai';
@@ -79,7 +80,7 @@ export async function processOperatorMessage(whatsapp: string, message: string, 
   try {
     const result = await generateText({
       model: google('gemini-2.5-flash'),
-      system: SYSTEM_PROMPT + STOCK_RULES,
+      system: SYSTEM_PROMPT + STOCK_RULES + PROMOTION_RULES,
       messages: [
         ...history,
         { role: 'user', content: userContent }
@@ -88,10 +89,12 @@ export async function processOperatorMessage(whatsapp: string, message: string, 
       maxSteps: 8, // Aumentado para permitir check -> pregunta -> respuesta -> creación
     });
 
-    // Agregar respuesta del asistente al historial
-    await conversationStore.addMessage(whatsapp, { role: 'assistant', content: result.text });
+    const reply = appendPromotionStatus(result.text, result.steps.flatMap(step => step.toolResults));
 
-    return result.text;
+    // Agregar respuesta del asistente al historial
+    await conversationStore.addMessage(whatsapp, { role: 'assistant', content: reply });
+
+    return reply;
   } catch (error) {
     console.error('Error in operator agent:', error);
     return "Lo siento, hubo un error procesando tu pedido o el audio. Por favor intentá de nuevo.";

@@ -1,3 +1,4 @@
+import { PROMOTION_RULES, appendPromotionStatus } from '../lib/promotionPolicy.js';
 import { STOCK_RULES } from '../lib/stockPolicy.js';
 import { google } from '@ai-sdk/google';
 import { generateText } from 'ai';
@@ -296,7 +297,7 @@ export async function processPublicMessage(whatsapp: string, message: string) {
 
     const result = await generateText({
       model: google('gemini-2.5-flash'),
-      system: systemPrompt + STOCK_RULES,
+      system: systemPrompt + STOCK_RULES + PROMOTION_RULES,
       messages: [
         ...history,
         { role: 'user', content: message }
@@ -313,6 +314,7 @@ export async function processPublicMessage(whatsapp: string, message: string) {
         : "Entendido! ¿Me confirmás a nombre de quién anoto el pedido para retirar?";
     }
 
+    responseText = appendPromotionStatus(responseText, result.steps.flatMap(step => step.toolResults));
     await conversationStore.addMessage(whatsapp, { role: 'assistant', content: responseText });
 
     return responseText;

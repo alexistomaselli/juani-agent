@@ -1,9 +1,15 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import { supabase } from '../lib/supabase.js';
+import { readOrderPromotion } from '../lib/promotionPolicy.js';
 import { randomUUID } from 'crypto';
 
 export const dashboardTools = {
+  consultar_promocion: tool({
+    description: 'Consulta el estado actual de la promoción de un cliente. Usá el UUID real obtenido de buscar_ultimo_pedido y el WhatsApp del cliente. No calcules porciones desde el historial del chat.',
+    parameters: z.object({ orderId: z.string().uuid(), whatsapp: z.string().min(1) }),
+    execute: async ({ orderId, whatsapp }) => ({ promotions: await readOrderPromotion(orderId, whatsapp), promotionAction: 'consulted' }),
+  }),
   listar_productos: tool({
     description: 'Obtiene TODOS los productos activos del catálogo, incluidos los que tienen stock cero. Stock indica si se puede tomar pedido; no excluyas los agotados al mostrar el catálogo. "description" contiene información pública del producto para ofrecer al cliente. "agentInstructions" contiene instrucciones internas exclusivas para ti sobre cómo interpretar cantidades y vender el producto. NUNCA menciones las "agentInstructions" en tu respuesta al cliente, úsalas solo para guiar tu lógica interna.',
     parameters: z.object({}),
@@ -165,7 +171,7 @@ export const dashboardTools = {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           })
-          .select('id, orderNumber, product, quantity, totalAmount, isPaid')
+          .select('id, orderNumber, product, quantity, totalAmount, isPaid, promoDiscountPercent')
           .single();
 
         if (orderErr) {
@@ -178,6 +184,8 @@ export const dashboardTools = {
         return {
           success: true,
           order,
+          promotions: await readOrderPromotion(order.id, params.whatsapp || ''),
+          promotionAction: 'created',
           message: `✅ Pedido #${order!.orderNumber} registrado: ${order!.quantity}x ${order!.product} ($${order!.totalAmount?.toLocaleString()}) para ${params.customerName}.${order!.isPaid ? ' 💰 Marcado como pagado.' : ' ⏳ Pendiente de cobro.'}`,
         };
       } catch (error: any) {
@@ -277,7 +285,7 @@ export const dashboardTools = {
     execute: async (params) => {
       try {
         // Buscar el pedido por UUID o por orderNumber
-        let query = supabase.from('Order').select('id, quantity, unitPrice, status');
+        let query = supabase.from('Order').select('id, quantity, unitPrice, status, whatsapp');
         
         const parsedNumber = parseInt(String(params.orderId), 10);
         // Si el parámetro es puramente numérico (ej: "55" o 55), buscar por orderNumber
@@ -290,7 +298,7 @@ export const dashboardTools = {
         const { data: order, error: orderErr } = await query.maybeSingle();
           
         if (orderErr || !order) return { success: false, error: 'Pedido no encontrado.' };
-        if (order.status !== 'PENDING' && params.status !== 'CANCELLED') {
+        if (order.status !== 'PENDING') {
            return { success: false, error: 'Solo se pueden modificar pedidos en estado PENDING.' };
         }
 
@@ -321,6 +329,8 @@ export const dashboardTools = {
         return {
           success: true,
           order: updatedOrder,
+          promotions: await readOrderPromotion(updatedOrder.id, order.whatsapp || ''),
+          promotionAction: 'updated',
           message: `✅ Pedido #${updatedOrder.orderNumber} modificado exitosamente.`
         };
       } catch (error: any) {
